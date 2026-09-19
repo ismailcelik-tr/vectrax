@@ -16,7 +16,7 @@ onnxruntime, coremltools — benchmarks only), `eval` (TrackEval).
 ## Outside the project
 | What | Install | Remove | Status |
 |---|---|---|---|
-| Homebrew formulae | `brew install ffmpeg macmon` | formulae in `tools/brew_added.txt` (diff vs `tools/brew_before.txt`) | pending (Xcode license) |
+| Homebrew formulae | `brew install ffmpeg macmon` | formulae in `tools/brew_added.txt` (diff vs `tools/brew_before.txt`) | installed: ffmpeg 9.0.2, macmon 0.8.2 + 9 deps |
 | CVAT (Docker) | `tools/cvat`, `docker compose up -d` | `docker compose down -v --rmi all` | pending (fixture step) |
 | uv wheel cache | automatic | `uv cache prune` (shared with other uv projects) | — |
 

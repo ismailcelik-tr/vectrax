@@ -647,6 +647,24 @@ wheels = [
 ]
 
 [[package]]
+name = "pyobjc-framework-libdispatch"
+version = "12.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f0/76/e40db30142b551790e5ab208e74de04cfc70823177a702c8c9e3f5e73034/pyobjc_framework_libdispatch-12.2.2.tar.gz", hash = "sha256:7cb799a7c5766cc1b68b68655a02c950646adfd2a743b7cbe8e4a04a51c44ecb", size = 40625, upload-time = "2026-08-11T19:44:46.277Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/e6/3c2c086f282457bb532721037b2548c67974cd425ded85d4325a72fe259e/pyobjc_framework_libdispatch-12.2.2-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:9c62b8c03b9e8c8925fdbb9d5a9541c1e9a4023ec06f1312441edfd166f33398", size = 15678, upload-time = "2026-08-11T19:37:28.686Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/96/97a2ea574323d22a9812f3b28dc13ef55bb3528b7ef8f52db37dc1d8de1b/pyobjc_framework_libdispatch-12.2.2-cp313-cp313t-macosx_10_13_universal2.whl", hash = "sha256:b67f7433d2fbc0d5ff2ce4cb81ef08e0d0717fe88c2a95e335512c2cdb52d722", size = 15945, upload-time = "2026-08-11T19:37:29.473Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/a2/827dac269b152880889e0ab0e9eeebb0e006790edc1f32fa9470a947c2d1/pyobjc_framework_libdispatch-12.2.2-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:2488964343f9282e3521ab2f136948a8eaf7438351dc45c39e34ba23b9f5bc6b", size = 15704, upload-time = "2026-08-11T19:37:30.252Z" },
+    { url = "https://files.pythonhosted.org/packages/95/9a/0bf4c9342949cf64a4781be35bf4cf37416e99b45e88c47604e208e11ba9/pyobjc_framework_libdispatch-12.2.2-cp314-cp314t-macosx_10_15_universal2.whl", hash = "sha256:74cea0ec7803147496c8b7b62e7ad1b9eda525aa692d8856464cec489951aa5d", size = 15987, upload-time = "2026-08-11T19:37:31.115Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/13/24d9a179b1ecfab1aee6fc6e1090890121c6163f33e16965620a468504bb/pyobjc_framework_libdispatch-12.2.2-cp315-cp315-macosx_10_15_universal2.whl", hash = "sha256:436828e39577ec9a889c59efa1e8a85fa0ba43af5069060a67dfead1df029ea4", size = 15724, upload-time = "2026-08-11T19:37:32.016Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/5e/b0edf8f0dc908437ff2359655d0cf6749839fb39944137855cbaf882bd9c/pyobjc_framework_libdispatch-12.2.2-cp315-cp315t-macosx_10_15_universal2.whl", hash = "sha256:b64b150207552b67caf1061e013ae6a1989aef34a18f36d9a3a455c51cd210c2", size = 16011, upload-time = "2026-08-11T19:37:32.795Z" },
+]
+
+[[package]]
 name = "pyobjc-framework-quartz"
 version = "12.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -910,6 +928,7 @@ dependencies = [
     { name = "opencv-contrib-python" },
     { name = "pyobjc-framework-avfoundation" },
     { name = "pyobjc-framework-coremedia" },
+    { name = "pyobjc-framework-libdispatch" },
 ]
 
 [package.dev-dependencies]
@@ -932,6 +951,7 @@ requires-dist = [
     { name = "opencv-contrib-python", specifier = ">=5.0.0.93" },
     { name = "pyobjc-framework-avfoundation", specifier = ">=12.2.2" },
     { name = "pyobjc-framework-coremedia", specifier = ">=12.2.2" },
+    { name = "pyobjc-framework-libdispatch", specifier = ">=12.2.2" },
 ]
 
 [package.metadata.requires-dev]

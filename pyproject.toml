@@ -7,6 +7,7 @@ dependencies = [
     "opencv-contrib-python>=5.0.0.93",
     "pyobjc-framework-avfoundation>=12.2.2",
     "pyobjc-framework-coremedia>=12.2.2",
+    "pyobjc-framework-libdispatch>=12.2.2",
 ]
 
 [dependency-groups]

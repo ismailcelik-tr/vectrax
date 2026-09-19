@@ -8,7 +8,7 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 - [x] Fixtures: single_target, crossing_targets, near_targets, occlusion, exit_reentry, fast_motion
 - [x] Fixture non_coco: transparent food container (R1 test)
 - [x] Evening (dark room): glass-to-glass MacBook + iPhone wired → ADR-002 closed
-- [x] Evening: low_light fixture (SAM 2 pre-label, owner review pending)
+- [x] Evening: low_light fixture (SAM 2 pre-label, owner reviewed)
 - [ ] CVAT up, annotate fixtures, export MOT 1.1
 
 ## Phase 1 — walking skeleton (approved 2026-09-19, closed 2026-09-19)

@@ -23,7 +23,8 @@ WARMUP_FRAMES = 30
 BOX_PX = 160
 FRAME_W, FRAME_H = 1280, 720
 OUT_DIR = Path(__file__).resolve().parent / "results" / "latency"
-R3_P95_MS = 100
+R3A_P95_MS = 100  # sensor → guidance (≈ tracked until Phase 5)
+R3B_P95_MS = 120  # sensor → render
 
 
 def _boxes(n):
@@ -69,12 +70,13 @@ def main():
         (OUT_DIR / f"{stamp}_{n}targets.json").write_text(json.dumps(report, indent=2))
         rows.append(report)
 
-    print(f"\n{'targets':>7} {'track p50/p95':>14} {'render p50/p95/max':>22} {'R3':>4} {'dropped':>8}")
+    print(f"\n{'targets':>7} {'tracked p50/p95':>16} {'R3a':>4} {'render p50/p95':>15} {'R3b':>4} {'dropped':>8}")
     for r in rows:
-        t, c = r["track_ms"], r["capture_to_render_ms"]
-        ok = "ok" if c["p95"] <= R3_P95_MS else "MISS"
-        print(f"{r['targets']:>7} {t['p50']:>6.1f}/{t['p95']:<6.1f} {c['p50']:>7.1f}/{c['p95']:.1f}/{c['max']:.1f} "
-              f"{ok:>4} {r['dropped']:>8}")
+        t, c = r["capture_to_tracked_ms"], r["capture_to_render_ms"]
+        a = "ok" if t["p95"] <= R3A_P95_MS else "MISS"
+        b = "ok" if c["p95"] <= R3B_P95_MS else "MISS"
+        print(f"{r['targets']:>7} {t['p50']:>7.1f}/{t['p95']:<7.1f} {a:>4} {c['p50']:>6.1f}/{c['p95']:<7.1f} {b:>4} "
+              f"{r['dropped']:>8}")
 
     print(f"\nSaved to {OUT_DIR}")
 

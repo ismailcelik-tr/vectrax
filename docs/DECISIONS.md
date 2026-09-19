@@ -99,3 +99,14 @@ Smoke run after the split: queue wait p95 0.2 ms, 1 frame dropped.
 frames. Operator calls cross threads, so `TrackManager` and `Pipeline`
 guard their pending queues with locks. `Metrics` is lock-protected;
 capture→render counts rendered frames only.
+
+## ADR-007 R3 split into system and display latency (2026-09-19, ACCEPTED)
+
+**Decision:** R3a p95 sensor PTS → guidance ≤ 100 ms; R3b p95 sensor PTS →
+render ≤ 120 ms. Until guidance exists (Phase 5), R3a is read from
+capture→tracked, since guidance runs right after tracking on the same thread.
+
+**Why:** after ADR-006 the two diverge: tracking finishes ~79 ms after the
+sensor, the OpenCV window shows it ~20 ms later (waitKey cycle). Future
+PTZ control consumes guidance, not the display. The display path depends
+on OpenCV HighGUI, which a later UI replaces.

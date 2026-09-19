@@ -62,3 +62,22 @@ any format effect, except 1080p BGRA (~+8 ms, conversion). Keep 720p BGRA.
 The same 720p BGRA probe read 56.8 ms in the morning. Hypothesis, not
 verified: PTS marks exposure start and dimmer evening light lengthens
 exposure. Compare latency only within one lighting condition.
+
+## Live latency after parallel propagators + PipelineThread (2026-09-19 ~17:24)
+
+Same command and setup as the 17:11 run; similar light. Raw:
+`benchmarks/results/latency/20260919-172403_*`, git `fd49895`.
+
+| Stage (ms, p50 / p95) | 1 target 17:11 → 17:24 | 3 targets 17:11 → 17:24 |
+|---|---|---|
+| sensor PTS → arrival | 66.1/67.5 → 65.0/66.7 | 61.4/64.3 → 64.7/68.0 |
+| arrival → tick | 0.2/0.2 → 0.2/0.2 | 16.5/32.6 → 0.2/0.2 |
+| tracking | 9.1/9.9 → 10.8/12.2 | 23.6/26.5 → 10.8/14.9 |
+| **sensor → tracked (R3a)** | 75.4/77.1 → **76.1/78.2** | 102.5/117.8 → **76.3/79.5** |
+| **sensor → render (R3b)** | 89.3/91.0 → **90.3/98.6** | 116.1/131.1 → **90.7/100.5** |
+| frames dropped | 1 → 0 | 118 → 1 |
+
+R3a (≤ 100) met for 1 and 3 targets; R3b (≤ 120) met for both (ADR-007).
+Cost of the split: 1-target render p95 +7.6 ms, since a finished tick may
+wait for the UI's current waitKey (0–16 ms). Known nit: `rendered` counts
+one frame more than `frames` (warm-up boundary race between threads).

@@ -9,8 +9,10 @@ chooses targets. v1 never actuates hardware; guidance is displayed only.
 - R1 Target domain: arbitrary operator-boxed objects. Class-agnostic
   Propagator (SOT) is the primary path; detector classes are hints only.
 - R2 Scene: indoor desk/room, near range, moderate motion.
-- R3 Latency goal: p95 sensor PTS→guidance ≤ 100 ms at 30 fps, 720p
-  (ADR-003).
+- R3 Latency goal at 30 fps, 720p (ADR-003, ADR-007):
+  - R3a p95 sensor PTS → guidance ≤ 100 ms (system; also future PTZ).
+  - R3b p95 sensor PTS → render ≤ 120 ms (operator display; renderer
+    will change).
 - R4 Targets: v1 meets R3 with 1–3 targets. 10+ is the next milestone,
   scoped by measured per-target cost.
 - R5 License: research now, possibly commercial later. Runtime

@@ -11,17 +11,17 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 - [ ] Evening: low_light fixture
 - [ ] CVAT up, annotate fixtures, export MOT 1.1
 
-## Phase 1 — walking skeleton (approved 2026-09-19)
+## Phase 1 — walking skeleton (approved 2026-09-19, closed 2026-09-19)
 Steps, one commit each, test first:
 - [x] clock, frames
 - [x] LatestFrameBuffer, sources: FileSource (sidecar timestamps), MacCamera
 - [x] Kalman (constant velocity), TrackState transitions, TrackQuality
 - [x] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
 - [x] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
-- [x] OpenCV UI (ADR-005 threading) — owner verification pending
+- [x] OpenCV UI (ADR-005 threading) — owner verified; issues logged below
 - [x] Pulled from Phase 6: `--record` session (video, stamps, operator.jsonl);
       headless replay reproduces it; `--render-out` review video
-- [ ] Latency 1 and 3 targets → PERFORMANCE.md
+- [x] Latency 1 and 3 targets → PERFORMANCE.md (R3: 1 target ok, 3 miss)
 
 Acceptance: tests green, ruff clean; owner verifies UI; deterministic
 single_target run reproducible; latency measured, not claimed.
@@ -61,6 +61,14 @@ escape 2109→122 px; no negative sizes. Outcomes unchanged: 2 and 3 remain.
 5. R3 (p95 ≤ 100 ms) met with 1 target only; ~8–10 ms CSRT per target plus
    ~14 ms render.
 
-## Next after Phase 1
-- Propagator benchmark: CSRT vs NanoTrack vs ViTTrack on annotated fixtures.
-- State hysteresis for TRACKING/DEGRADED.
+Acceptance: tests green, ruff clean; owner verified UI on camera;
+deterministic replay reproduces runs (test + session replay); latency
+measured. Open issues carried forward: reacquisition, identity hijack,
+3-target latency.
+
+## Next after Phase 1 (decision pending)
+- Reacquisition + identity hijack: detector path (Phase 2–4) or a
+  detector-free interim (template/colour search).
+- Latency levers, unmeasured: render cost (~14 ms), propagators in
+  parallel threads, cheaper propagators (NanoTrack, ViTTrack), scale.
+- Propagator benchmark on annotated fixtures (needs CVAT annotation).

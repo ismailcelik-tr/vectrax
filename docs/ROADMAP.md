@@ -17,10 +17,24 @@ Steps, one commit each, test first:
 - [x] LatestFrameBuffer, sources: FileSource (sidecar timestamps), MacCamera
 - [x] Kalman (constant velocity), TrackState transitions, TrackQuality
 - [x] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
-- [ ] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
+- [x] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
 - [ ] OpenCV UI (ADR-005 threading) — owner verifies on camera
 - [ ] Latency 1 and 3 targets → PERFORMANCE.md
 
 Acceptance: tests green, ruff clean; owner verifies UI; deterministic
 single_target run reproducible; latency measured, not claimed.
 REACQUIRING arrives in Phase 4.
+
+### Observed on fixtures (CSRT baseline, single_target, 1 target)
+Headless, init box 795,297,113,143. Not yet in PERFORMANCE.md (no GT).
+- track_ms p50/p95: 8.1/9.2 ms at scale 1.0; 6.0/6.8 ms at 0.5.
+- Scale 0.5: quality hovers near good_quality → TRACKING/DEGRADED flapping.
+  Needs hysteresis.
+- Box does not grow as the cup approaches the camera (CSRT scale drift).
+- Frames 318–334: box drifts onto the wall; score catches it, but state
+  reads OCCLUDED while the cup is visible. Propagator alone cannot tell
+  occlusion from drift; detector/reacquisition must (Phase 3–4).
+
+## Next after Phase 1
+- Propagator benchmark: CSRT vs NanoTrack vs ViTTrack on annotated fixtures.
+- State hysteresis for TRACKING/DEGRADED.

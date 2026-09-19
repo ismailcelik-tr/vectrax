@@ -27,12 +27,17 @@ class FileSource:
     def dropped(self) -> int:
         return 0
 
+    @property
+    def frame_size(self) -> tuple[int, int]:
+        return self._size
+
     def open(self) -> None:
         self._cap = cv2.VideoCapture(str(self._path))
         if not self._cap.isOpened():
             raise OSError(f"cannot decode {self._path}")
 
         self._fps = self._cap.get(cv2.CAP_PROP_FPS)
+        self._size = (int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
     def close(self) -> None:
         if self._cap is not None:

@@ -20,3 +20,8 @@ class CameraSource(Protocol):
 
     @property
     def dropped(self) -> int: ...
+
+    @property
+    def frame_size(self) -> tuple[int, int]:
+        """(width, height); valid after open()."""
+        ...

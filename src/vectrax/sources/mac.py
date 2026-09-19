@@ -23,6 +23,10 @@ class MacCamera:
     def dropped(self) -> int:
         return self._buffer.dropped + self._capture.dropped
 
+    @property
+    def frame_size(self) -> tuple[int, int]:
+        return self._size[1], self._size[0]
+
     def open(self) -> None:
         self._capture.start()
 

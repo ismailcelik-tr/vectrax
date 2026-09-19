@@ -75,4 +75,22 @@ measured. Open issues carried forward: reacquisition, identity hijack,
       crossing_targets by owner; near_targets, exit_reentry, fast_motion,
       non_coco pre-labeled with SAM 2 (owner reviewed near_targets)
 - [x] Owner reviewed all 7; exported to data/fixtures/*.gt.zip (CVAT stopped)
-- [ ] Phase 2: detector/backend benchmark → reacquisition, identity hijack
+- [ ] Phase 2 (approved 2026-09-19), see below
+
+## Phase 2 — evidence-based model selection
+2a Evaluation harness (no downloads): MOT GT loader; tracking metrics
+   (success IoU≥0.5, state correctness vs visible/partial/absent, recovery
+   after absence, identity hijack); detection P/R/AP50 for cup/person and
+   class-agnostic recall for non_coco; GT frame-0 boxes as operator input.
+   CSRT baseline on all 8 fixtures.
+2b Propagators: CSRT, KCF, ViTTrack (OpenCV Zoo, Apache-2.0), NanoTrack
+   (only if licence verifies). Accuracy + ms/target → ADR-008.
+2c Detectors: YOLO26n, YOLO11n (AGPL, reference only); RF-DETR-N, D-FINE-N
+   (Apache-2.0, runtime candidates). Backends: PyTorch CPU/MPS, ONNX Runtime
+   CPU/CoreML EP, Core ML. Load/compile, p50/p95, CPU/GPU/ANE, RSS, 5-min
+   sustained for top 2; fixture accuracy. COCO val only if results look
+   wrong. → ADR-009.
+Out of scope: open-vocabulary detectors (AGPL or too heavy); R1
+reacquisition goes through appearance (Phase 4). SAM 2 is not a runtime
+candidate (~1.1 s/frame on MPS), so SAM 2 pre-labels do not bias results;
+SAM-family candidates would be scored on owner-labelled fixtures only.

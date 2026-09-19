@@ -1,0 +1,27 @@
+[project]
+name = "vectrax"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.3",
+    "opencv-contrib-python>=5.0.0.93",
+    "pyobjc-framework-avfoundation>=12.2.2",
+    "pyobjc-framework-coremedia>=12.2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.8",
+]
+eval = [
+    "trackeval",
+]
+ml = [
+    "coremltools>=9.0",
+    "onnxruntime>=1.30.0",
+    "torch>=2.14.0",
+]
+
+[tool.uv.sources]
+trackeval = { git = "https://github.com/JonathonLuiten/TrackEval" }

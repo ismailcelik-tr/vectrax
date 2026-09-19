@@ -8,3 +8,4 @@ __pycache__/
 # Recordings and weights stay local; may contain people (R6).
 data/
 models/
+tools/

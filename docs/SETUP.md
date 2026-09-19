@@ -11,7 +11,14 @@ Every install made for VectraX outside the repo is recorded here, so
 | Recordings, model weights | `data/`, `models/` (git-ignored) | — |
 
 Dependency groups: default (runtime), `dev` (pytest, ruff), `ml` (torch,
-onnxruntime, coremltools — benchmarks only), `eval` (TrackEval).
+onnxruntime, coremltools — benchmarks only), `eval` (TrackEval),
+`annotate` (SAM 2 from facebookresearch/sam2 @ 2b90b9f, Apache-2.0; the PyPI
+`sam2` package is an unofficial fork and is not used).
+
+Model weights in `models/` (git-ignored):
+| File | Source | SHA-256 |
+|---|---|---|
+| `sam2/sam2.1_hiera_small.pt` (184 MB) | dl.fbaipublicfiles.com/segment_anything_2/092824/ | `6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38` |
 
 ## Outside the project
 | What | Install | Remove | Status |

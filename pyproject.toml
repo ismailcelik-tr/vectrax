@@ -11,6 +11,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+annotate = [
+    "sam-2",
+]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.8",
@@ -26,6 +29,7 @@ ml = [
 
 [tool.uv.sources]
 trackeval = { git = "https://github.com/JonathonLuiten/TrackEval" }
+sam-2 = { git = "https://github.com/facebookresearch/sam2", rev = "2b90b9f5ceec907a1c18123530e92e794ad901a4" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

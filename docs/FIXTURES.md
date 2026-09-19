@@ -28,6 +28,12 @@ one clip per scenario; re-record rather than edit.
 - Cut by the frame edge is truncation, not occlusion: no `occluded` flag.
 - A normal grip (fingers on the object) is not occlusion.
 
+## Pre-labeling
+`scripts/sam2_prelabel.py` runs SAM 2 on every 10th frame from boxes on
+frame 0; the result becomes CVAT keyframes and needs human review. SAM 2 is
+not a Phase 2 detector candidate, so it does not bias detector scores.
+Never pre-label with a model that will be evaluated on these fixtures.
+
 ## Export format (`scripts/cvat_tasks.py export <name>` → `<name>.gt.zip`)
 MOT 1.1 `gt/gt.txt`: `frame,id,x,y,w,h,not_ignored,class,visibility`.
 - Frames are 1-based: VectraX `frame_id = frame - 1`.

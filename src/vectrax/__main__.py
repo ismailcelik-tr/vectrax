@@ -41,13 +41,13 @@ def _parse_boxes(text):
     return [tuple(float(v) for v in part.split(",")) for part in text.split(";")]
 
 
-def _build(args, renders) -> Pipeline:
+def _build(args) -> Pipeline:
     cfg = TrackingConfig()
     if args.source.startswith(FILE_PREFIX):
-        return build_file_pipeline(args.source[len(FILE_PREFIX):], cfg, renders=renders, scale=args.scale)
+        return build_file_pipeline(args.source[len(FILE_PREFIX):], cfg, scale=args.scale)
 
     if args.source.startswith(CAMERA_PREFIX):
-        return build_camera_pipeline(args.source[len(CAMERA_PREFIX):], cfg, renders=renders, scale=args.scale)
+        return build_camera_pipeline(args.source[len(CAMERA_PREFIX):], cfg, scale=args.scale)
 
     raise SystemExit(f"--source must start with {FILE_PREFIX} or {CAMERA_PREFIX}")
 
@@ -122,7 +122,7 @@ def _headless(args):
     if _clip_path(args) is None:
         raise SystemExit("--headless needs a file source")
 
-    pipe = _build(args, renders=False)
+    pipe = _build(args)
     w, h = pipe.frame_size
     ops = _schedule(args, (w, h))
     review = None
@@ -149,7 +149,7 @@ def _headless(args):
 
 
 def _interactive(args):
-    pipe = _build(args, renders=True)
+    pipe = _build(args)
     if args.record is not None:
         name = args.record or time.strftime("%Y%m%d-%H%M%S")
         recorder = SessionRecorder(SESSIONS_DIR / name, fps=RECORD_FPS)

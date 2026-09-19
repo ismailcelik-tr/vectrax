@@ -80,3 +80,22 @@ tick drops frames instead of building a queue.
 First smoke run (1 target, not a benchmark): tick→render ~14 ms, more
 than tracking itself. Revisit when the inference worker arrives
 (Phase 3) or if render cost blocks R3.
+
+## ADR-006 Tracking on PipelineThread, UI renders the newest tick (2026-09-19, ACCEPTED)
+
+Supersedes the single-consumer part of ADR-005.
+
+**Decision:** Live mode runs read → process on `PipelineThread`; the main
+thread draws the newest `Tick` from a capacity-1 buffer. Clip mode stays
+single-threaded (frozen start, paced playback).
+
+**Evidence:** macOS `cv2.waitKey(1)` and `cv2.pollKey()` both block ~14–16 ms
+(render probe: draw 0.3 ms, imshow 0.9 ms, waitKey 13.7 ms). With 3 targets
+tracking + waitKey exceeded the 33 ms frame period: 118/930 frames dropped,
+queue wait p95 32.6 ms (benchmarks/results/latency/20260919-171137_3targets).
+Smoke run after the split: queue wait p95 0.2 ms, 1 frame dropped.
+
+**Consequence:** every frame is tracked and measured; the UI may skip
+frames. Operator calls cross threads, so `TrackManager` and `Pipeline`
+guard their pending queues with locks. `Metrics` is lock-protected;
+capture→render counts rendered frames only.

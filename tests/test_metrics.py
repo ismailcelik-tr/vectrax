@@ -22,14 +22,14 @@ def test_empty_stats_summary_is_none():
     assert LatencyStats().summary() is None
 
 
-def _timing(render=True):
-    return FrameTiming(capture_ns=0, arrival_ns=50 * MS, tick_ns=60 * MS, tracked_ns=70 * MS,
-                       render_ns=80 * MS if render else None)
+def _timing():
+    return FrameTiming(capture_ns=0, arrival_ns=50 * MS, tick_ns=60 * MS, tracked_ns=70 * MS)
 
 
 def test_realtime_reports_capture_based_spans():
     m = Metrics(RunMode.REALTIME)
     m.observe(_timing())
+    m.observe_render(_timing(), render_ns=80 * MS)
 
     s = m.summary()
 
@@ -39,11 +39,13 @@ def test_realtime_reports_capture_based_spans():
     assert s["capture_to_tracked_ms"]["p50"] == pytest.approx(70)
     assert s["capture_to_render_ms"]["p50"] == pytest.approx(80)
     assert s["frames"] == 1
+    assert s["rendered"] == 1
 
 
 def test_deterministic_reports_processing_only():
     m = Metrics(RunMode.DETERMINISTIC)
     m.observe(_timing())
+    m.observe_render(_timing(), render_ns=80 * MS)
 
     s = m.summary()
 
@@ -52,11 +54,15 @@ def test_deterministic_reports_processing_only():
     assert "capture_to_render_ms" not in s
 
 
-def test_missing_render_is_skipped():
+def test_unrendered_frames_still_count():
     m = Metrics(RunMode.REALTIME)
-    m.observe(_timing(render=False))
+    m.observe(_timing())
 
-    assert m.summary()["capture_to_render_ms"] is None
+    s = m.summary()
+
+    assert s["frames"] == 1
+    assert s["rendered"] == 0
+    assert s["capture_to_render_ms"] is None
 
 
 def test_warmup_frames_are_excluded():

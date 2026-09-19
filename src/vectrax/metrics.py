@@ -1,5 +1,6 @@
 """Per-frame stage timing and latency distributions."""
 
+import threading
 from dataclasses import dataclass
 from enum import Enum
 
@@ -21,7 +22,6 @@ class FrameTiming:
     arrival_ns: int
     tick_ns: int
     tracked_ns: int
-    render_ns: int | None = None
 
 
 class LatencyStats:
@@ -47,33 +47,46 @@ class LatencyStats:
 
 class Metrics:
     """In DETERMINISTIC mode capture_ns comes from a recording, so spans
-    against it are meaningless; only processing time is reported."""
+    against it are meaningless; only processing time is reported.
+    Thread-safe: tracking and rendering report from different threads."""
 
     def __init__(self, mode: RunMode, warmup_frames: int = 0):
         self.mode = mode
+        self._lock = threading.Lock()
         self._warmup = warmup_frames
         self._frames = 0
+        self._rendered = 0
         self._spans = {"track_ms": LatencyStats()}
         if mode is RunMode.REALTIME:
             for name in ("capture_to_arrival_ms", "arrival_to_tick_ms", "capture_to_tracked_ms", "capture_to_render_ms"):
                 self._spans[name] = LatencyStats()
 
     def observe(self, t: FrameTiming) -> None:
-        if self._warmup > 0:
-            self._warmup -= 1
-            return
+        """Every processed frame."""
+        with self._lock:
+            if self._warmup > 0:
+                self._warmup -= 1
+                return
 
-        self._frames += 1
-        self._spans["track_ms"].add(t.tracked_ns - t.tick_ns)
-        if self.mode is not RunMode.REALTIME:
-            return
+            self._frames += 1
+            self._spans["track_ms"].add(t.tracked_ns - t.tick_ns)
+            if self.mode is not RunMode.REALTIME:
+                return
 
-        self._spans["capture_to_arrival_ms"].add(t.arrival_ns - t.capture_ns)
-        self._spans["arrival_to_tick_ms"].add(t.tick_ns - t.arrival_ns)
-        self._spans["capture_to_tracked_ms"].add(t.tracked_ns - t.capture_ns)
-        if t.render_ns is not None:
-            self._spans["capture_to_render_ms"].add(t.render_ns - t.capture_ns)
+            self._spans["capture_to_arrival_ms"].add(t.arrival_ns - t.capture_ns)
+            self._spans["arrival_to_tick_ms"].add(t.tick_ns - t.arrival_ns)
+            self._spans["capture_to_tracked_ms"].add(t.tracked_ns - t.capture_ns)
+
+    def observe_render(self, t: FrameTiming, render_ns: int) -> None:
+        """Frames the UI displayed; it may skip frames to show the newest."""
+        with self._lock:
+            if self._warmup > 0 or self.mode is not RunMode.REALTIME:
+                return
+
+            self._rendered += 1
+            self._spans["capture_to_render_ms"].add(render_ns - t.capture_ns)
 
     def summary(self) -> dict:
-        return {"mode": self.mode.value, "frames": self._frames,
-                **{name: stats.summary() for name, stats in self._spans.items()}}
+        with self._lock:
+            return {"mode": self.mode.value, "frames": self._frames, "rendered": self._rendered,
+                    **{name: stats.summary() for name, stats in self._spans.items()}}

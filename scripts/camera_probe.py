@@ -32,6 +32,9 @@ NS_PER_MS = 1_000_000
 PERMISSION_TIMEOUT_S = 60
 OUT_DIR = Path(__file__).resolve().parent.parent / "benchmarks" / "results" / "probe"
 
+PIXEL_FORMATS = {"bgra": Quartz.kCVPixelFormatType_32BGRA,
+                 "420v": Quartz.kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange}
+
 METHOD_AVF = "avf"
 METHOD_OPENCV = "opencv"
 METHOD_BOTH = "both"
@@ -138,9 +141,19 @@ class _Delegate(NSObject, protocols=[objc.protocolNamed("AVCaptureVideoDataOutpu
         host_now = CM.CMTimeGetSeconds(CM.CMClockGetTime(CM.CMClockGetHostTimeClock()))
         pts = CM.CMTimeGetSeconds(CM.CMSampleBufferGetPresentationTimeStamp(sample))
 
+        r = self.rec
+        pix = CM.CMSampleBufferGetImageBuffer(sample)
+        if r["pixel_format"] != "bgra":
+            r["arrival"].append(arrival)
+            r["pts_s"].append(pts)
+            r["delivery_s"].append(host_now - pts)
+            r["shapes"].append((Quartz.CVPixelBufferGetHeight(pix), Quartz.CVPixelBufferGetWidth(pix)))
+            if len(r["arrival"]) >= r["target"]:
+                r["done"].set()
+            return
+
         # Copy cost = what building a FramePacket from a CVPixelBuffer costs.
         t0 = time.monotonic_ns()
-        pix = CM.CMSampleBufferGetImageBuffer(sample)
         Quartz.CVPixelBufferLockBaseAddress(pix, Quartz.kCVPixelBufferLock_ReadOnly)
         h = Quartz.CVPixelBufferGetHeight(pix)
         w = Quartz.CVPixelBufferGetWidth(pix)
@@ -150,7 +163,6 @@ class _Delegate(NSObject, protocols=[objc.protocolNamed("AVCaptureVideoDataOutpu
         Quartz.CVPixelBufferUnlockBaseAddress(pix, Quartz.kCVPixelBufferLock_ReadOnly)
         copy_ns = time.monotonic_ns() - t0
 
-        r = self.rec
         r["arrival"].append(arrival)
         r["pts_s"].append(pts)
         r["delivery_s"].append(host_now - pts)
@@ -185,10 +197,10 @@ def _set_format(device, width, height, fps):
     raise SystemExit(f"{device.localizedName()} has no {width}x{height}@{fps} format")
 
 
-def _probe_avf(device, width, height, fps, frames):
+def _probe_avf(device, width, height, fps, frames, pixel_format):
     total = frames + WARMUP_FRAMES
     rec = {"arrival": [], "pts_s": [], "delivery_s": [], "copy": [], "dropped": 0,
-           "target": total, "done": threading.Event(), "shapes": []}
+           "target": total, "done": threading.Event(), "shapes": [], "pixel_format": pixel_format}
 
     session = AVF.AVCaptureSession.alloc().init()
     dev_input, err = AVF.AVCaptureDeviceInput.deviceInputWithDevice_error_(device, None)
@@ -197,7 +209,7 @@ def _probe_avf(device, width, height, fps, frames):
 
     output = AVF.AVCaptureVideoDataOutput.alloc().init()
     output.setAlwaysDiscardsLateVideoFrames_(True)
-    output.setVideoSettings_({Quartz.kCVPixelBufferPixelFormatTypeKey: Quartz.kCVPixelFormatType_32BGRA})
+    output.setVideoSettings_({Quartz.kCVPixelBufferPixelFormatTypeKey: PIXEL_FORMATS[pixel_format]})
     delegate = _Delegate.alloc().init()
     delegate.rec = rec
     queue = dispatch_queue_create(b"vectrax.probe", DISPATCH_QUEUE_SERIAL)
@@ -226,6 +238,7 @@ def _probe_avf(device, width, height, fps, frames):
     shapes = rec["shapes"][WARMUP_FRAMES:]
     return {
         "method": METHOD_AVF,
+        "pixel_format": pixel_format,
         "actual_shape": list(shapes[-1]),
         "shape_mismatch_frames": sum(s[:2] != (height, width) for s in shapes),
         "first_frame_ms": round((rec["arrival"][0] - t_open) / NS_PER_MS, 1),
@@ -263,7 +276,7 @@ def _verify_opencv_index(device, index):
     return f"MISMATCH: requested {w}x{h}, got {None if not ok else img.shape[1::-1]}"
 
 
-def _probe_opencv(device, width, height, fps, frames):
+def _probe_opencv(device, width, height, fps, frames, pixel_format):
     index = _opencv_index(device)
     check = _verify_opencv_index(device, index)
 
@@ -345,6 +358,7 @@ def main():
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--frames", type=int, default=600)
     p.add_argument("--label", default="", help="free text, e.g. wired / wireless")
+    p.add_argument("--pixel-format", choices=sorted(PIXEL_FORMATS), default="bgra", help="AVF output format")
     args = p.parse_args()
 
     if args.list:
@@ -368,13 +382,13 @@ def main():
     methods = [METHOD_AVF, METHOD_OPENCV] if args.method == METHOD_BOTH else [args.method]
     for m in methods:
         probe = _probe_avf if m == METHOD_AVF else _probe_opencv
-        result = probe(device, args.width, args.height, args.fps, args.frames)
+        result = probe(device, args.width, args.height, args.fps, args.frames, args.pixel_format)
         report["results"].append(result)
         _print(result)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     slug = device.localizedName().split()[0].lower()
-    suffix = f"_{args.label}" if args.label else ""
+    suffix = (f"_{args.label}" if args.label else "") + f"_{args.pixel_format}"
     out = OUT_DIR / f"{slug}{suffix}_{args.width}x{args.height}@{args.fps}_{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps(report, indent=2))
     print(f"\nSaved {out}")

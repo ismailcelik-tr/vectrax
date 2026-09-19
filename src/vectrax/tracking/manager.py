@@ -4,6 +4,7 @@ Operator calls (select, command, remove) are queued and applied at the start
 of the next step, so every change is tied to a frame and replays identically.
 """
 
+import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Executor
@@ -78,23 +79,30 @@ class TrackManager:
         self._factory = propagator_factory
         self._bus = bus
         self._tracks: dict[int, _Track] = {}
+        # Operator calls may come from the UI thread while step runs.
+        self._lock = threading.Lock()
         self._pending: list[tuple] = []
         self._next_id = 1
 
     def select(self, box: Box) -> int:
-        track_id = self._next_id
-        self._next_id += 1
-        self._pending.append((_Op.SELECT, track_id, box))
+        with self._lock:
+            track_id = self._next_id
+            self._next_id += 1
+            self._pending.append((_Op.SELECT, track_id, box))
+
         return track_id
 
     def command(self, track_id: int, cmd: Command, box: Box | None = None) -> None:
-        self._pending.append((_Op.COMMAND, track_id, cmd, box))
+        with self._lock:
+            self._pending.append((_Op.COMMAND, track_id, cmd, box))
 
     def remove(self, track_id: int) -> None:
-        self._pending.append((_Op.REMOVE, track_id))
+        with self._lock:
+            self._pending.append((_Op.REMOVE, track_id))
 
     def step(self, frame: FramePacket) -> list[TrackSnapshot]:
-        pending, self._pending = self._pending, []
+        with self._lock:
+            pending, self._pending = self._pending, []
         for op in pending:
             self._apply(op, frame)
 

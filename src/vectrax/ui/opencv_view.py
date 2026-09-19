@@ -1,7 +1,7 @@
 """Local operator UI (OpenCV window). Talks only to Pipeline.
 
-macOS requires the window on the main thread, so the pipeline tick runs
-there too; capture stays on the AVFoundation queue (ADR-005).
+macOS requires the window on the main thread. Live tracking runs on
+PipelineThread so the ~16 ms waitKey never delays it (ADR-006).
 """
 
 import json
@@ -12,9 +12,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from vectrax.buffer import LatestFrameBuffer
 from vectrax.clock import Clock, MonotonicClock
 from vectrax.metrics import RunMode
-from vectrax.pipeline import Pipeline
+from vectrax.pipeline import Pipeline, PipelineThread
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackSnapshot
 from vectrax.tracking.state import Command, TrackState
@@ -24,6 +25,7 @@ __all__ = ["TITLE_BAR_PT", "Action", "Controller", "draw", "load_init", "run_ui"
 WINDOW = "VectraX"
 MIN_DRAG_PX = 8
 LIVE_WAIT_MS = 1
+RENDER_POLL_S = 0.005
 FROZEN_WAIT_MS = 15
 KEY_NONE = -1
 KEY_ESC = 27
@@ -239,7 +241,6 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
            max_frames: int | None = None) -> dict:
     """max_frames: stop after that many processed frames (benchmarks)."""
     clock = clock or MonotonicClock()
-    live = pipe.mode is RunMode.REALTIME
     w, h = pipe.frame_size
     ctl = Controller(pipe, (w, h))
     for x, y, bw, bh in init_boxes:
@@ -252,69 +253,110 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
         cv2.resizeWindow(WINDOW, *window_size((w, h), screen))
     cv2.setMouseCallback(WINDOW, lambda e, x, y, *_: ctl.on_mouse(e, x, y))
 
-    # A clip starts frozen on frame 0 so targets can be drawn on it.
-    frozen = not live
-    first = None if live else pipe.read(0)
-    shown, tracks, last_tick = first, [], None
-    anchor = None
-    fps, last_ns = 0.0, clock.now_ns()
-    processed = 0
     try:
-        while True:
-            if frozen:
-                if shown is None:
-                    break
-
-                pending = ctl.selected if last_tick is None else ()
-                hud = _hud(pipe, tracks, fps, last_tick, ctl.focus)
-                cv2.imshow(WINDOW, draw(shown.image, tracks, hud, ctl.focus, ctl.drag, pending))
-                key = cv2.waitKey(FROZEN_WAIT_MS)
-            else:
-                frame, first = (first, None) if first is not None else (pipe.read(), None)
-                if frame is None:
-                    if not live:
-                        break
-
-                    key = cv2.waitKey(LIVE_WAIT_MS)
-                    if ctl.on_key(key) is Action.QUIT:
-                        break
-
-                    continue
-
-                if not live:
-                    anchor = anchor or (clock.now_ns(), frame.capture_ns)
-                    _pace(clock, anchor, frame.capture_ns)
-
-                last_tick = pipe.process(frame)
-                tracks = last_tick.tracks
-                ctl.update_tracks(tracks)
-                now = clock.now_ns()
-                fps = FPS_SMOOTHING * fps + (1 - FPS_SMOOTHING) * NS_PER_S / max(now - last_ns, 1)
-                last_ns = now
-                cv2.imshow(WINDOW, draw(frame.image, tracks, _hud(pipe, tracks, fps, last_tick, ctl.focus), ctl.focus, ctl.drag))
-                key = cv2.waitKey(LIVE_WAIT_MS)
-                pipe.rendered(last_tick)
-                shown = frame
-                processed += 1
-                if max_frames is not None and processed >= max_frames:
-                    break
-
-            action = ctl.on_key(key) if key != KEY_NONE else Action.NONE
-            if action is Action.QUIT:
-                break
-
-            if action is Action.TOGGLE_FREEZE and not live:
-                if frozen and last_tick is None and init_path is not None and ctl.selected:
-                    _save_init(init_path, ctl.selected)
-
-                frozen = not frozen
-                anchor = None
+        if pipe.mode is RunMode.REALTIME:
+            _run_live(pipe, ctl, clock, max_frames)
+        else:
+            _run_clip(pipe, ctl, clock, init_path, max_frames)
     finally:
         pipe.close()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
 
     return pipe.metrics.summary()
+
+
+class _FpsMeter:
+    def __init__(self, clock):
+        self._clock = clock
+        self._last = clock.now_ns()
+        self.fps = 0.0
+
+    def tick(self):
+        now = self._clock.now_ns()
+        self.fps = FPS_SMOOTHING * self.fps + (1 - FPS_SMOOTHING) * NS_PER_S / max(now - self._last, 1)
+        self._last = now
+
+
+def _run_live(pipe, ctl, clock, max_frames):
+    """Tracking on PipelineThread; this (main) thread only draws the newest tick."""
+    ticks = LatestFrameBuffer()
+    runner = PipelineThread(pipe, ticks, stop_at_end=False, max_frames=max_frames)
+    runner.start()
+    meter = _FpsMeter(clock)
+    try:
+        while True:
+            tick = ticks.get(RENDER_POLL_S)
+            if tick is None and ticks.closed:
+                break
+
+            if tick is not None:
+                ctl.update_tracks(tick.tracks)
+                meter.tick()
+                hud = _hud(pipe, tick.tracks, meter.fps, tick, ctl.focus)
+                cv2.imshow(WINDOW, draw(tick.frame.image, tick.tracks, hud, ctl.focus, ctl.drag))
+
+            key = cv2.waitKey(LIVE_WAIT_MS)
+            if tick is not None:
+                pipe.rendered(tick)
+
+            if ctl.on_key(key) is Action.QUIT:
+                break
+    finally:
+        runner.stop()
+        runner.join()
+
+    if runner.error is not None:
+        raise runner.error
+
+
+def _run_clip(pipe, ctl, clock, init_path, max_frames):
+    """Single-threaded: starts frozen on frame 0 so targets can be drawn on it."""
+    frozen = True
+    first = pipe.read(0)
+    shown, tracks, last_tick = first, [], None
+    anchor = None
+    meter = _FpsMeter(clock)
+    processed = 0
+    while True:
+        if frozen:
+            if shown is None:
+                return
+
+            pending = ctl.selected if last_tick is None else ()
+            hud = _hud(pipe, tracks, meter.fps, last_tick, ctl.focus)
+            cv2.imshow(WINDOW, draw(shown.image, tracks, hud, ctl.focus, ctl.drag, pending))
+            key = cv2.waitKey(FROZEN_WAIT_MS)
+        else:
+            frame, first = (first, None) if first is not None else (pipe.read(), None)
+            if frame is None:
+                return
+
+            anchor = anchor or (clock.now_ns(), frame.capture_ns)
+            _pace(clock, anchor, frame.capture_ns)
+            last_tick = pipe.process(frame)
+            tracks = last_tick.tracks
+            ctl.update_tracks(tracks)
+            meter.tick()
+            hud = _hud(pipe, tracks, meter.fps, last_tick, ctl.focus)
+            cv2.imshow(WINDOW, draw(frame.image, tracks, hud, ctl.focus, ctl.drag))
+            key = cv2.waitKey(LIVE_WAIT_MS)
+            pipe.rendered(last_tick)
+            shown = frame
+            processed += 1
+            if max_frames is not None and processed >= max_frames:
+                return
+
+        action = ctl.on_key(key) if key != KEY_NONE else Action.NONE
+        if action is Action.QUIT:
+            return
+
+        if action is Action.TOGGLE_FREEZE:
+            if frozen and last_tick is None and init_path is not None and ctl.selected:
+                _save_init(init_path, ctl.selected)
+
+            frozen = not frozen
+            anchor = None
 
 
 def _pace(clock, anchor, capture_ns):

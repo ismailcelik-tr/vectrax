@@ -59,9 +59,10 @@ Raw: `benchmarks/results/probe/macbook_fmt_*`, git `010a265`.
 
 Reading: run-to-run spread (~10 ms, two clusters ~68 and ~77 ms) exceeds
 any format effect, except 1080p BGRA (~+8 ms, conversion). Keep 720p BGRA.
-The same 720p BGRA probe read 56.8 ms in the morning. Hypothesis, not
-verified: PTS marks exposure start and dimmer evening light lengthens
-exposure. Compare latency only within one lighting condition.
+The same 720p BGRA probe read 56.8 ms in the morning. An exposure-length
+hypothesis (dimmer light → later delivery) was contradicted: in a dark room
+at 19:30 frame age fell to p50 51.5 ms (`low_light` sidecar). Cause
+unknown. Compare latency only within one session and lighting.
 
 ## Live latency after parallel propagators + PipelineThread (2026-09-19 ~17:24)
 
@@ -81,3 +82,17 @@ R3a (≤ 100) met for 1 and 3 targets; R3b (≤ 120) met for both (ADR-007).
 Cost of the split: 1-target render p95 +7.6 ms, since a finished tick may
 wait for the UI's current waitKey (0–16 ms). Known nit: `rendered` counts
 one frame more than `frames` (warm-up boundary race between threads).
+
+## Glass-to-glass, screen flash (2026-09-19 ~19:25, dark room, AC power)
+
+Command: `uv run scripts/glass_to_glass.py --device <name> [--label wired]`,
+60 black/white toggles, 0.5 s each. Raw: `benchmarks/results/glass/`.
+Includes display latency (same for both cameras). The flash window did
+not cover the full screen; contrast was sufficient (0 missed toggles).
+
+| Camera | command → arrival mean / p50 / p95 | command → PTS mean / p50 / p95 |
+|---|---|---|
+| MacBook | 120.7 / 122.2 / 151.6 | 58.0 / 56.2 / 86.3 |
+| iPhone wired (rear camera) | 102.3 / 101.8 / 116.1 | 51.7 / 51.7 / 65.3 |
+
+Frame quantization (33 ms) spreads single samples; compare means.

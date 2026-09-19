@@ -15,7 +15,7 @@ Record: `uv run scripts/record_fixture.py --name <name> --seconds <s> --note "<t
 | `exit_reentry` | 25 | Owner walks out of frame, returns after ~3 s | LOST → reacquisition |
 | `fast_motion` | 15 | Cup moved fast, with direction changes | propagator limits, blur |
 | `non_coco` | 20 | Transparent food container moved slowly | R1: object outside detector classes |
-| `low_light` | 20 | Dim light, cup moved slowly | auto exposure, fps drop |
+| `low_light` | 20 | Dark room, screen light only, cup moved slowly | noise, blur (fps stayed 30) |
 
 Rules: camera fixed, nobody but the owner or consenting people in frame,
 one clip per scenario; re-record rather than edit.

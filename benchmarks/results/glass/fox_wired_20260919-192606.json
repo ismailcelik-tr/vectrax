@@ -1,0 +1,36 @@
+{
+  "device": {
+    "name": "Fox Kameras\u0131",
+    "id": "D79D41AE-D87C-4A73-9667-8DFF00000001"
+  },
+  "label": "wired",
+  "requested": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30
+  },
+  "toggles": 60,
+  "half_period_s": 0.5,
+  "avf_dropped": 0,
+  "levels": {
+    "black": 18.8,
+    "white": 39.1
+  },
+  "toggle_to_arrival_ms": {
+    "n": 60,
+    "mean": 102.3,
+    "p50": 101.8,
+    "p95": 116.1,
+    "min": 64.8,
+    "max": 121.1
+  },
+  "toggle_to_pts_ms": {
+    "n": 60,
+    "mean": 51.7,
+    "p50": 51.7,
+    "p95": 65.3,
+    "min": 24.0,
+    "max": 70.9
+  },
+  "missed_toggles": 0
+}

@@ -7,8 +7,8 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 - [x] Camera probe, ADR-001..003 (docs/PERFORMANCE.md)
 - [x] Fixtures: single_target, crossing_targets, near_targets, occlusion, exit_reentry, fast_motion
 - [x] Fixture non_coco: transparent food container (R1 test)
-- [ ] Evening (dark room): glass-to-glass MacBook + iPhone wired → close ADR-002
-- [ ] Evening: low_light fixture
+- [x] Evening (dark room): glass-to-glass MacBook + iPhone wired → ADR-002 closed
+- [x] Evening: low_light fixture (SAM 2 pre-label, owner review pending)
 - [ ] CVAT up, annotate fixtures, export MOT 1.1
 
 ## Phase 1 — walking skeleton (approved 2026-09-19, closed 2026-09-19)
@@ -70,7 +70,7 @@ measured. Open issues carried forward: reacquisition, identity hijack,
 - [x] Latency: parallel propagators, PipelineThread (ADR-006), R3 split
       (ADR-007). R3a and R3b met for 1 and 3 targets. Format experiment:
       no gain; frame age depends on lighting.
-- [ ] Evening: glass-to-glass (MacBook, iPhone wired), low_light fixture
+- [x] Evening: glass-to-glass, low_light fixture
 - [x] CVAT up; fixtures annotated (MOT 1.1): occlusion, single_target,
       crossing_targets by owner; near_targets, exit_reentry, fast_motion,
       non_coco pre-labeled with SAM 2 (owner reviewed near_targets)

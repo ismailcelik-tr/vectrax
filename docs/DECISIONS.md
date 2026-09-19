@@ -24,7 +24,7 @@ Acceptable: other platforms get their own CameraSource.
 `activeFormat`; `InputPriority` preset is unsupported on macOS. Set the
 format after `startRunning` and verify delivered frame size.
 
-## ADR-002 MacBook camera primary, wired iPhone secondary (2026-09-19, PROVISIONAL)
+## ADR-002 MacBook camera primary, wired iPhone secondary (2026-09-19, ACCEPTED)
 
 **Decision:** Baseline and fixtures use the built-in camera. Wired iPhone
 (Continuity Camera) is the second source, proving source independence.
@@ -34,9 +34,11 @@ Wireless Continuity Camera is not used for evaluation.
 1549 ms), 27.6 effective fps, p95 frame age 66 ms. Wired: no gaps,
 p50 frame age 44.7 ms vs 56.8 ms on MacBook.
 
-**Open:** iPhone PTS is translated to the Mac host clock; whether it marks
-exposure or transmit time is unknown, so the wired advantage is
-unverified. Revisit after the glass-to-glass measurement.
+**Closed by glass-to-glass (2026-09-19, dark room, screen flash):**
+screen command → frame in Python, mean / p95: MacBook 120.7 / 151.6 ms,
+wired iPhone 102.3 / 116.1 ms. The wired advantage (~18 ms) is real, so
+the iPhone PTS is not misleading. MacBook stays primary (always
+available); wired iPhone is the proven lower-latency option.
 
 ## ADR-003 Latency budget starts at sensor PTS (2026-09-19, ACCEPTED)
 
@@ -49,6 +51,11 @@ operator experiences); separate budgets for both.
 
 **Consequence:** About 40 ms (MacBook) remains for processing, rendering
 excluded. Every stage budget derives from this.
+
+**Caveat (glass-to-glass):** screen command → PTS measured 58 ms (MacBook),
+52 ms (iPhone). Part is display latency, unmeasured, so the true
+light-to-PTS lag is unknown but not zero: PTS lags the real event, and R3
+figures understate what the operator experiences.
 
 ## ADR-004 CSRT as baseline propagator (2026-09-19, PROVISIONAL)
 

@@ -166,3 +166,15 @@ def test_run_fixture_on_synthetic_clip(tmp_path):
     assert track.frames_scored == n
     assert track.success_rate > 0.9
     assert result.track_ms["n"] == n
+
+
+def test_on_target_counts_small_boxes_inside_the_object():
+    gt_vis = _gt(_visible(2))
+    gt_box = dict.fromkeys(gt_vis, BOX)
+    small_inside = (115.0, 115.0, 20.0, 20.0)
+    preds = [PredBox(S.TRACKING, small_inside), PredBox(S.TRACKING, FAR)]
+
+    r = evaluate_track(gt_vis, gt_box, preds, other_gt={})
+
+    assert r.success_rate == 0.0
+    assert r.on_target_rate == 0.5

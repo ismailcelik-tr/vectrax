@@ -36,6 +36,7 @@ def _summary(name, result):
     return {
         "fixture": name,
         "success": sum(t.successes for t in tracks) / present if present else 0.0,
+        "on_target": sum(t.on_target for t in tracks) / present if present else 0.0,
         "false_visible": sum(t.false_visible for t in tracks),
         "hijack_frames": sum(t.hijack_frames for t in tracks),
         "recoveries": [r for t in tracks for r in t.recoveries],
@@ -60,10 +61,10 @@ def main():
     for name in args.fixtures.split(","):
         rows.append(_summary(name, run_fixture(FIXTURES / f"{name}.mp4", PROPAGATORS[args.propagator])))
 
-    print(f"\n{'fixture':17s} {'success':>7s} {'falseVis':>8s} {'hijack':>6s} {'partial→deg':>11s} "
+    print(f"\n{'fixture':17s} {'success':>7s} {'onTarget':>8s} {'falseVis':>8s} {'hijack':>6s} {'partial→deg':>11s} "
           f"{'absent→hid':>10s} {'ms p50':>6s}  recoveries (frames)")
     for r in rows:
-        print(f"{r['fixture']:17s} {_pct(r['success']):>7s} {r['false_visible']:8d} {r['hijack_frames']:6d} "
+        print(f"{r['fixture']:17s} {_pct(r['success']):>7s} {_pct(r['on_target']):>8s} {r['false_visible']:8d} {r['hijack_frames']:6d} "
               f"{_pct(r['partial_as_degraded']):>11s} {_pct(r['absent_as_hidden']):>10s} {r['track_ms_p50']:6.1f}  "
               f"{r['recoveries']}")
 

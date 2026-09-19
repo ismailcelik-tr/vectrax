@@ -26,6 +26,7 @@ class TrackResult:
     frames_scored: int = 0
     present_frames: int = 0
     successes: int = 0
+    on_target: int = 0  # box center inside the GT box, any size
     false_visible: int = 0  # target absent, tracker claims it is on screen
     hijack_frames: int = 0  # tracker box sits on another annotated target
     recoveries: list[int | None] = field(default_factory=list)  # frames to re-lock after each reappearance
@@ -34,6 +35,11 @@ class TrackResult:
     @property
     def success_rate(self) -> float:
         return self.successes / self.present_frames if self.present_frames else 0.0
+
+    @property
+    def on_target_rate(self) -> float:
+        """Separates 'right place, wrong size' from 'wrong place'."""
+        return self.on_target / self.present_frames if self.present_frames else 0.0
 
 
 def iou(a, b) -> float:
@@ -69,6 +75,7 @@ def evaluate_track(gt_vis: dict[int, Visibility], gt_box: dict[int, tuple], pred
         if not shown:
             continue
 
+        r.on_target += _center_inside(pred.box, gt_box[f])
         if iou(pred.box, gt_box[f]) >= SUCCESS_IOU:
             r.successes += 1
             hits.add(f)
@@ -78,6 +85,11 @@ def evaluate_track(gt_vis: dict[int, Visibility], gt_box: dict[int, tuple], pred
     first = next((f for f, p in enumerate(preds) if p is not None), len(preds))
     r.recoveries = [_recovery(r_frame, gt_vis, hits, len(preds)) for r_frame in _reappearances(gt_vis, first, len(preds))]
     return r
+
+
+def _center_inside(pred, gt):
+    cx, cy = pred[0] + pred[2] / 2, pred[1] + pred[3] / 2
+    return gt[0] <= cx <= gt[0] + gt[2] and gt[1] <= cy <= gt[1] + gt[3]
 
 
 def _reappearances(gt_vis, first, n):

@@ -25,3 +25,11 @@ one clip per scenario; re-record rather than edit.
 - Keyframe every 10–15 frames and at every direction change; CVAT interpolates.
 - Occluded or out of frame: mark the track `outside` for those frames.
 - Partially visible: keep the box on the visible part, set `occluded`.
+- Cut by the frame edge is truncation, not occlusion: no `occluded` flag.
+- A normal grip (fingers on the object) is not occlusion.
+
+## Export format (`scripts/cvat_tasks.py export <name>` → `<name>.gt.zip`)
+MOT 1.1 `gt/gt.txt`: `frame,id,x,y,w,h,not_ignored,class,visibility`.
+- Frames are 1-based: VectraX `frame_id = frame - 1`.
+- Outside frames have no row. `visibility` 0.0 = occluded, 1.0 = visible.
+- `class` indexes `gt/labels.txt` (1-based): cup, person, object.

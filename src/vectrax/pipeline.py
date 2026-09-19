@@ -1,6 +1,7 @@
 """Pipeline tick: source → TrackManager → snapshots. The UI talks only to this layer."""
 
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +14,7 @@ from vectrax.sources import CameraSource
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackManager, TrackSnapshot
-from vectrax.tracking.propagators import CsrtPropagator
+from vectrax.tracking.propagators import CsrtPropagator, Propagator
 from vectrax.tracking.state import Command
 
 __all__ = ["Pipeline", "PipelineThread", "Tick", "build_camera_pipeline", "build_file_pipeline"]
@@ -151,19 +152,20 @@ def _box_list(box):
     return None if box is None else [box.cx, box.cy, box.w, box.h]
 
 
-def _assemble(source, cfg, clock, mode, scale):
+def _assemble(source, cfg, clock, mode, scale, propagator_factory=None):
     bus = EventBus()
     # Worker threads live for the process; OpenCV releases the GIL in CSRT.
     executor = ThreadPoolExecutor(PROPAGATOR_WORKERS, thread_name_prefix="propagator")
-    manager = TrackManager(cfg, lambda: CsrtPropagator(scale), bus, executor)
+    factory = propagator_factory or (lambda: CsrtPropagator(scale))
+    manager = TrackManager(cfg, factory, bus, executor)
     return Pipeline(source, manager, bus, clock or MonotonicClock(), mode)
 
 
 def build_file_pipeline(path: Path | str, cfg: TrackingConfig, clock: Clock | None = None,
-                        scale: float = 1.0) -> Pipeline:
+                        scale: float = 1.0, propagator_factory: Callable[[], Propagator] | None = None) -> Pipeline:
     from vectrax.sources.file import FileSource
 
-    return _assemble(FileSource(path), cfg, clock, RunMode.DETERMINISTIC, scale)
+    return _assemble(FileSource(path), cfg, clock, RunMode.DETERMINISTIC, scale, propagator_factory)
 
 
 def build_camera_pipeline(query: str, cfg: TrackingConfig, clock: Clock | None = None,

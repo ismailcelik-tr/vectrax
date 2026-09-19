@@ -18,7 +18,7 @@ Steps, one commit each, test first:
 - [x] Kalman (constant velocity), TrackState transitions, TrackQuality
 - [x] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
 - [x] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
-- [ ] OpenCV UI (ADR-005 threading) — owner verifies on camera
+- [x] OpenCV UI (ADR-005 threading) — owner verification pending
 - [ ] Latency 1 and 3 targets → PERFORMANCE.md
 
 Acceptance: tests green, ruff clean; owner verifies UI; deterministic

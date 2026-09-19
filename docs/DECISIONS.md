@@ -65,3 +65,18 @@ read as appearance change.
 **Known limits:** CSRT reports no confidence; NCC against the initial
 template drops when the object rotates or changes pose. Cost per target
 at 720p unmeasured; a `scale` option runs it downsized.
+
+## ADR-005 Phase 1 threading: capture queue + main-thread tick (2026-09-19, ACCEPTED)
+
+**Decision:** AVFoundation delivers frames on its dispatch queue into a
+`LatestFrameBuffer` (capacity 1, drop-oldest). The main thread reads the
+newest frame, runs the tracking tick, draws and pumps the OpenCV window.
+
+**Why:** macOS requires GUI calls on the main thread. With no inference
+worker yet, one consumer thread is the simplest correct design; a slow
+tick drops frames instead of building a queue.
+
+**Consequence:** tracking and rendering costs add up on one thread.
+First smoke run (1 target, not a benchmark): tick→render ~14 ms, more
+than tracking itself. Revisit when the inference worker arrives
+(Phase 3) or if render cost blocks R3.

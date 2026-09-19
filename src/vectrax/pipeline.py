@@ -51,10 +51,17 @@ class Pipeline:
 
     def tick(self, timeout_s: float = READ_TIMEOUT_S) -> Tick | None:
         """None: end of a recorded stream, or no live frame within timeout."""
-        frame = self._source.read(timeout_s)
+        frame = self.read(timeout_s)
         if frame is None:
             return None
 
+        return self.process(frame)
+
+    def read(self, timeout_s: float = READ_TIMEOUT_S) -> FramePacket | None:
+        return self._source.read(timeout_s)
+
+    def process(self, frame: FramePacket) -> Tick:
+        """Operator calls made before this apply to this frame."""
         tick_ns = self._clock.now_ns()
         tracks = self._manager.step(frame)
         timing = FrameTiming(frame.capture_ns, frame.arrival_ns, tick_ns, self._clock.now_ns())

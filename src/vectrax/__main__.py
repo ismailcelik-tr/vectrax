@@ -14,12 +14,14 @@ from pathlib import Path
 from vectrax.pipeline import Pipeline, build_camera_pipeline, build_file_pipeline
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
+from vectrax.ui.opencv_view import load_init, run_ui
 
 __all__ = ["main"]
 
 FILE_PREFIX = "file:"
 CAMERA_PREFIX = "camera:"
 QUALITY_DECIMALS = 4
+INIT_SUFFIX = ".init.json"
 
 
 def _parse_boxes(text):
@@ -54,13 +56,29 @@ def _record(tick, img_w, img_h):
     return {"frame_id": tick.frame.frame_id, "tracks": tracks}
 
 
+def _init_path(args):
+    if not args.source.startswith(FILE_PREFIX):
+        return None
+
+    return Path(args.source[len(FILE_PREFIX):]).with_suffix(INIT_SUFFIX)
+
+
+def _init_boxes(args):
+    """Explicit --init-boxes win; a clip falls back to its saved <clip>.init.json."""
+    if args.init_boxes:
+        return _parse_boxes(args.init_boxes)
+
+    path = _init_path(args)
+    return load_init(path) if path else []
+
+
 def _headless(args):
     if not args.source.startswith(FILE_PREFIX):
         raise SystemExit("--headless needs a file source")
 
     pipe = _build(args, renders=False)
     w, h = pipe.frame_size
-    for x, y, bw, bh in _parse_boxes(args.init_boxes):
+    for x, y, bw, bh in _init_boxes(args):
         pipe.select(Box.from_xywh_px(x, y, bw, bh, w, h))
 
     sink = open(args.out, "w") if args.out else contextlib.nullcontext(sys.stdout)  # noqa: SIM115
@@ -87,9 +105,7 @@ def main(argv=None):
     if args.headless:
         summary = _headless(args)
     else:
-        from vectrax.ui.opencv_view import run_ui
-
-        summary = run_ui(_build(args, renders=True), _parse_boxes(args.init_boxes))
+        summary = run_ui(_build(args, renders=True), _init_boxes(args), _init_path(args))
 
     if args.metrics_out:
         Path(args.metrics_out).write_text(json.dumps(summary, indent=2))

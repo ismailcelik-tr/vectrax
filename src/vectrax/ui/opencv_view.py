@@ -1,0 +1,286 @@
+"""Local operator UI (OpenCV window). Talks only to Pipeline.
+
+macOS requires the window on the main thread, so the pipeline tick runs
+there too; capture stays on the AVFoundation queue (ADR-005).
+"""
+
+import json
+import time
+from enum import Enum, auto
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+from vectrax.clock import Clock, MonotonicClock
+from vectrax.metrics import RunMode
+from vectrax.pipeline import Pipeline
+from vectrax.tracking.geometry import Box
+from vectrax.tracking.manager import TrackSnapshot
+from vectrax.tracking.state import Command, TrackState
+
+__all__ = ["Action", "Controller", "draw", "load_init", "run_ui"]
+
+WINDOW = "VectraX"
+MIN_DRAG_PX = 8
+LIVE_WAIT_MS = 1
+FROZEN_WAIT_MS = 15
+KEY_NONE = -1
+KEY_ESC = 27
+FPS_SMOOTHING = 0.9
+NS_PER_S = 1_000_000_000
+NS_PER_MS = 1_000_000
+HELP = "drag: select  click: focus  1-9: focus id  p: pause/resume  s: stop  x: remove  r: reselect  space: freeze  q: quit"
+
+_COLORS = {
+    TrackState.INITIALIZING: (255, 255, 0),
+    TrackState.TRACKING: (0, 220, 0),
+    TrackState.DEGRADED: (0, 220, 255),
+    TrackState.OCCLUDED: (0, 140, 255),
+    TrackState.LOST: (0, 0, 255),
+    TrackState.PAUSED: (160, 160, 160),
+    TrackState.STOPPED: (80, 80, 80),
+}
+_PAUSABLE = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
+_DRAG_COLOR = (255, 0, 255)
+_TEXT_COLOR = (255, 255, 255)
+_FONT = cv2.FONT_HERSHEY_SIMPLEX
+
+
+class Action(Enum):
+    NONE = auto()
+    QUIT = auto()
+    TOGGLE_FREEZE = auto()
+
+
+class Controller:
+    """Mouse/keyboard → operator calls. Pixel coordinates of the frame."""
+
+    def __init__(self, pipe, frame_size: tuple[int, int]):
+        self._pipe = pipe
+        self._w, self._h = frame_size
+        self._tracks: dict[int, TrackSnapshot] = {}
+        self._drag_start = None
+        self._drag_now = None
+        self._reselect = False
+        self.focus: int | None = None
+        self.selected: list[tuple[int, int, int, int]] = []
+
+    @property
+    def drag(self):
+        if self._drag_start is None:
+            return None
+
+        return (*self._drag_start, *self._drag_now)
+
+    def update_tracks(self, tracks: list[TrackSnapshot]) -> None:
+        self._tracks = {t.track_id: t for t in tracks}
+        if self.focus is not None and self.focus not in self._tracks:
+            self.focus = None
+
+    def on_mouse(self, event, x, y) -> None:
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self._drag_start = self._drag_now = (x, y)
+            return
+
+        if self._drag_start is None:
+            return
+
+        self._drag_now = (x, y)
+        if event != cv2.EVENT_LBUTTONUP:
+            return
+
+        (x0, y0), (x1, y1) = self._drag_start, self._drag_now
+        self._drag_start = self._drag_now = None
+        rect = (min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0))
+        if rect[2] < MIN_DRAG_PX or rect[3] < MIN_DRAG_PX:
+            self._focus_at(x1, y1)
+            return
+
+        box = Box.from_xywh_px(*rect, self._w, self._h)
+        if self._reselect and self.focus is not None:
+            self._reselect = False
+            self._pipe.command(self.focus, Command.RESELECT, box)
+            return
+
+        self.focus = self._pipe.select(box)
+        self.selected.append(rect)
+
+    def on_key(self, key: int) -> Action:
+        ch = chr(key & 0xFF) if key != KEY_NONE else ""
+        if ch == "q" or key == KEY_ESC:
+            return Action.QUIT
+
+        if ch == " ":
+            return Action.TOGGLE_FREEZE
+
+        if ch.isdigit() and int(ch) in self._tracks:
+            self.focus = int(ch)
+            return Action.NONE
+
+        if ch == "c":
+            self.focus = None
+            return Action.NONE
+
+        track = self._tracks.get(self.focus)
+        if track is None:
+            return Action.NONE
+
+        if ch == "p":
+            if track.state is TrackState.PAUSED:
+                self._pipe.command(track.track_id, Command.RESUME)
+            elif track.state in _PAUSABLE:
+                self._pipe.command(track.track_id, Command.PAUSE)
+        elif ch == "s":
+            self._pipe.command(track.track_id, Command.STOP)
+        elif ch == "x":
+            self._pipe.remove(track.track_id)
+            self.focus = None
+        elif ch == "r":
+            self._reselect = True
+
+        return Action.NONE
+
+    def _focus_at(self, x, y):
+        hits = []
+        for t in self._tracks.values():
+            bx, by, bw, bh = t.box.to_xywh_px(self._w, self._h)
+            if bx <= x <= bx + bw and by <= y <= by + bh:
+                hits.append((bw * bh, t.track_id))
+
+        self.focus = min(hits)[1] if hits else None
+
+
+def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None, drag=None, pending=()):
+    out = image.copy()
+    h, w = out.shape[:2]
+    for t in tracks:
+        color = _COLORS[t.state]
+        x, y, bw, bh = t.box.to_xywh_px(w, h)
+        thick = 3 if t.track_id == focus else 2
+        cv2.rectangle(out, (x, y), (x + bw, y + bh), color, thick)
+
+        trail = np.array([(round(cx * w), round(cy * h)) for cx, cy in t.trail], np.int32)
+        cv2.polylines(out, [trail], False, color, 1)
+
+        score = t.quality.propagator_score
+        label = f"{t.track_id} {t.state.value}" + ("" if score is None else f" {score:.2f}")
+        cv2.putText(out, label, (x, max(y - 6, 12)), _FONT, 0.5, color, 2)
+
+    if drag is not None:
+        x0, y0, x1, y1 = drag
+        cv2.rectangle(out, (x0, y0), (x1, y1), _DRAG_COLOR, 1)
+
+    # Selections queued on a frozen frame, not yet processed.
+    for x, y, bw, bh in pending:
+        cv2.rectangle(out, (x, y), (x + bw, y + bh), _DRAG_COLOR, 2)
+
+    lines = [" ".join(f"{k}={v}" for k, v in hud.items()), HELP]
+    for i, text in enumerate(lines):
+        cv2.putText(out, text, (10, 20 + 18 * i), _FONT, 0.45, _TEXT_COLOR, 1)
+
+    return out
+
+
+def load_init(path: Path) -> list[tuple[float, ...]]:
+    if not path.exists():
+        return []
+
+    return [tuple(b) for b in json.loads(path.read_text())["boxes"]]
+
+
+def _save_init(path, rects):
+    path.write_text(json.dumps({"frame_id": 0, "boxes": [list(r) for r in rects]}))
+    print(f"Saved init boxes to {path}")
+
+
+def _hud(pipe, tracks, fps, last_tick):
+    counts = {}
+    for t in tracks:
+        counts[t.state.value] = counts.get(t.state.value, 0) + 1
+
+    hud = {"mode": pipe.mode.value, "fps": f"{fps:.1f}", "dropped": pipe.dropped}
+    if last_tick is not None and pipe.mode is RunMode.REALTIME:
+        hud["age_ms"] = f"{(last_tick.timing.tracked_ns - last_tick.timing.capture_ns) / NS_PER_MS:.0f}"
+
+    return hud | counts
+
+
+def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clock | None = None) -> dict:
+    clock = clock or MonotonicClock()
+    live = pipe.mode is RunMode.REALTIME
+    w, h = pipe.frame_size
+    ctl = Controller(pipe, (w, h))
+    for x, y, bw, bh in init_boxes:
+        pipe.select(Box.from_xywh_px(x, y, bw, bh, w, h))
+
+    cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.setMouseCallback(WINDOW, lambda e, x, y, *_: ctl.on_mouse(e, x, y))
+
+    # A clip starts frozen on frame 0 so targets can be drawn on it.
+    frozen = not live
+    first = None if live else pipe.read(0)
+    shown, tracks, last_tick = first, [], None
+    anchor = None
+    fps, last_ns = 0.0, clock.now_ns()
+    try:
+        while True:
+            if frozen:
+                if shown is None:
+                    break
+
+                pending = ctl.selected if last_tick is None else ()
+                hud = _hud(pipe, tracks, fps, last_tick)
+                cv2.imshow(WINDOW, draw(shown.image, tracks, hud, ctl.focus, ctl.drag, pending))
+                key = cv2.waitKey(FROZEN_WAIT_MS)
+            else:
+                frame, first = (first, None) if first is not None else (pipe.read(), None)
+                if frame is None:
+                    if not live:
+                        break
+
+                    key = cv2.waitKey(LIVE_WAIT_MS)
+                    if ctl.on_key(key) is Action.QUIT:
+                        break
+
+                    continue
+
+                if not live:
+                    anchor = anchor or (clock.now_ns(), frame.capture_ns)
+                    _pace(clock, anchor, frame.capture_ns)
+
+                last_tick = pipe.process(frame)
+                tracks = last_tick.tracks
+                ctl.update_tracks(tracks)
+                now = clock.now_ns()
+                fps = FPS_SMOOTHING * fps + (1 - FPS_SMOOTHING) * NS_PER_S / max(now - last_ns, 1)
+                last_ns = now
+                cv2.imshow(WINDOW, draw(frame.image, tracks, _hud(pipe, tracks, fps, last_tick), ctl.focus, ctl.drag))
+                key = cv2.waitKey(LIVE_WAIT_MS)
+                pipe.rendered(last_tick)
+                shown = frame
+
+            action = ctl.on_key(key) if key != KEY_NONE else Action.NONE
+            if action is Action.QUIT:
+                break
+
+            if action is Action.TOGGLE_FREEZE and not live:
+                if frozen and last_tick is None and init_path is not None and ctl.selected:
+                    _save_init(init_path, ctl.selected)
+
+                frozen = not frozen
+                anchor = None
+    finally:
+        pipe.close()
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+
+    return pipe.metrics.summary()
+
+
+def _pace(clock, anchor, capture_ns):
+    """Play a clip at its recorded speed."""
+    wall0, cap0 = anchor
+    wait_ns = (capture_ns - cap0) - (clock.now_ns() - wall0)
+    if wait_ns > 0:
+        time.sleep(wait_ns / NS_PER_S)

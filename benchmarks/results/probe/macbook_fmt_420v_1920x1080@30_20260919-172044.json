@@ -1,0 +1,63 @@
+{
+  "device": {
+    "name": "MacBook Pro Kameras\u0131",
+    "id": "6C707041-05AC-0011-0002-000000000001",
+    "type": "AVCaptureDeviceTypeBuiltInWideAngleCamera"
+  },
+  "label": "fmt",
+  "requested": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "frames": 600
+  },
+  "env": {
+    "macos": "27.0",
+    "python": "3.13.14",
+    "opencv": "5.0.0",
+    "git_sha": "010a265",
+    "power": "Now drawing from 'AC Power'",
+    "center_stage": false
+  },
+  "results": [
+    {
+      "method": "avf",
+      "pixel_format": "420v",
+      "actual_shape": [
+        1080,
+        1920
+      ],
+      "shape_mismatch_frames": 0,
+      "first_frame_ms": 378.2,
+      "arrival": {
+        "frames": 600,
+        "effective_fps": 30.0,
+        "interval_ms": {
+          "mean": 33.334,
+          "p50": 33.343,
+          "p95": 36.13,
+          "p99": 37.848,
+          "max": 39.107
+        },
+        "gaps": 0
+      },
+      "sensor_pts_interval_ms": {
+        "mean": 33.337,
+        "p50": 33.34,
+        "p95": 33.34,
+        "p99": 33.34,
+        "max": 33.34
+      },
+      "pts_to_delivery_ms": {
+        "mean": 67.511,
+        "p50": 68.435,
+        "p95": 70.981,
+        "p99": 72.37,
+        "max": 73.754
+      },
+      "copy_to_numpy_ms": null,
+      "avf_dropped": 0,
+      "cpu_percent": 5.0
+    }
+  ]
+}

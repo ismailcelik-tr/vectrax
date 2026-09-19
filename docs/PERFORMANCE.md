@@ -43,3 +43,22 @@ costs ~8 ms per target; draw + imshow + waitKey ~14 ms. With 3 targets
 one loop (~38 ms) exceeds the 33 ms frame period, so frames wait and drop.
 The earlier GIL-contention hypothesis is not supported: arrival latency
 did not rise with 3 targets. Single run per row.
+
+## Camera format vs frame age (2026-09-19 ~17:20, AC power, MacBook)
+
+Command: `uv run scripts/camera_probe.py --device MacBook --method avf
+--width W --height H --pixel-format F --label fmt`, two rounds, order varied.
+Raw: `benchmarks/results/probe/macbook_fmt_*`, git `010a265`.
+
+| Format | round 1 p50 / p95 | round 2 p50 / p95 |
+|---|---|---|
+| 1280x720 BGRA | 77.4 / 83.6 | 67.2 / 71.0 |
+| 1280x720 420v | 68.3 / 70.3 | 77.2 / 82.9 |
+| 1920x1080 420v | 68.4 / 71.0 | 68.1 / 70.0 |
+| 1920x1080 BGRA | 84.1 / 88.5 | 85.2 / 88.8 |
+
+Reading: run-to-run spread (~10 ms, two clusters ~68 and ~77 ms) exceeds
+any format effect, except 1080p BGRA (~+8 ms, conversion). Keep 720p BGRA.
+The same 720p BGRA probe read 56.8 ms in the morning. Hypothesis, not
+verified: PTS marks exposure start and dimmer evening light lengthens
+exposure. Compare latency only within one lighting condition.

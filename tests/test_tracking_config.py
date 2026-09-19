@@ -41,3 +41,8 @@ def test_quality_penalizes_motion_outside_gate():
 
     assert inside.combined(cfg) == pytest.approx(0.8)
     assert outside.combined(cfg) < inside.combined(cfg)
+
+
+def test_hysteresis_bands_must_not_overlap():
+    with pytest.raises(ValueError):
+        TrackingConfig(min_quality=0.4, good_quality=0.6, quality_hysteresis=0.15)

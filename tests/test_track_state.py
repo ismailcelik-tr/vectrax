@@ -149,3 +149,28 @@ def test_every_transition_is_in_table():
 
 def test_stopped_is_terminal():
     assert ALLOWED[S.STOPPED] == frozenset()
+
+
+# Hysteresis: band of CFG.quality_hysteresis around each threshold.
+
+H = CFG.quality_hysteresis
+
+
+def test_tracking_holds_inside_band():
+    assert next_state(S.TRACKING, ev(CFG.good_quality - H / 2), CFG) is S.TRACKING
+
+
+def test_tracking_leaves_below_band():
+    assert next_state(S.TRACKING, ev(CFG.good_quality - H * 1.5), CFG) is S.DEGRADED
+
+
+def test_degraded_needs_full_good_to_recover():
+    assert next_state(S.DEGRADED, ev(CFG.good_quality - H / 2), CFG) is S.DEGRADED
+
+
+def test_occluded_needs_margin_to_become_visible():
+    assert next_state(S.OCCLUDED, ev(CFG.min_quality + H / 2), CFG) is S.OCCLUDED
+
+
+def test_degraded_stays_visible_just_above_min():
+    assert next_state(S.DEGRADED, ev(CFG.min_quality + H / 2), CFG) is S.DEGRADED

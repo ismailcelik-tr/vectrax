@@ -162,6 +162,8 @@ class TrackManager:
         if q is not None and q >= self._cfg.min_quality:
             t.kf.update(obs.box)
             t.last_visible = ns
+        else:
+            t.kf.coast()
 
         t.streak = t.streak + 1 if q is not None and q >= self._cfg.good_quality else 0
         t.observed = obs.box if obs else None

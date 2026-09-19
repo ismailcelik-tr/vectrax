@@ -70,7 +70,11 @@ def next_state(state: TrackState, ev: Evidence, cfg: TrackingConfig) -> TrackSta
     if state in _OPERATOR_ONLY:
         return state
 
-    visible = ev.quality is not None and ev.quality >= cfg.min_quality
+    h = cfg.quality_hysteresis
+    # Hysteresis: leaving the current band needs a margin of h.
+    min_q = cfg.min_quality + h if state is _S.OCCLUDED else cfg.min_quality
+    good_q = cfg.good_quality - h if state is _S.TRACKING else cfg.good_quality
+    visible = ev.quality is not None and ev.quality >= min_q
     if state is _S.INITIALIZING:
         if ev.good_streak >= cfg.confirm_frames:
             return _S.TRACKING
@@ -86,7 +90,7 @@ def next_state(state: TrackState, ev: Evidence, cfg: TrackingConfig) -> TrackSta
 
         return _S.OCCLUDED
 
-    if ev.quality >= cfg.good_quality:
+    if ev.quality >= good_q:
         return _S.TRACKING
 
     return _S.DEGRADED

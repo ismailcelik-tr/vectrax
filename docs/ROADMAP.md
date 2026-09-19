@@ -54,6 +54,10 @@ Root causes, in order of evidence:
 3. Identity hijack (two_cups_live): grayscale NCC score too weak; no rule
    against two tracks on one object.
 4. TRACKING/DEGRADED flapping around good_quality: needs hysteresis.
+
+Fixed 1 and 4 (coast damping τ 0.3 s, clamps, hysteresis 0.1). Replay of the
+same sessions: state changes 90→59 (two_cups), 82→45 (pupils); worst box
+escape 2109→122 px; no negative sizes. Outcomes unchanged: 2 and 3 remain.
 5. R3 (p95 ≤ 100 ms) met with 1 target only; ~8–10 ms CSRT per target plus
    ~14 ms render.
 

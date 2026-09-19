@@ -106,7 +106,7 @@ Re-ID ladder: none → color histogram → generic embedding (e.g. DINOv2-S).
 OSNet is out (person-only, R1).
 Protocol: on AC power, Low Power Mode off, warm-up excluded, sustained runs
 long enough to expose throttling; record macOS, Python, package versions,
-git SHA. Accelerator usage needs `powermetrics` (sudo): ask the owner.
+git SHA. Accelerator usage via `macmon` (no sudo).
 Vendor numbers are reference only.
 
 ## Mac camera

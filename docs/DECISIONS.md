@@ -117,3 +117,20 @@ capture→tracked, since guidance runs right after tracking on the same thread.
 sensor, the OpenCV window shows it ~20 ms later (waitKey cycle). Future
 PTZ control consumes guidance, not the display. The display path depends
 on OpenCV HighGUI, which a later UI replaces.
+
+## ADR-008 NanoTrack with NCC scoring as default propagator (2026-09-19, ACCEPTED)
+
+Supersedes ADR-004.
+
+**Decision:** Default propagator is OpenCV NanoTrack v2 (Apache-2.0,
+models/trackers, 1.8 MB), with our NCC appearance score driving quality.
+
+**Evidence:** docs/EVALUATION.md, propagator comparison on 8 annotated
+fixtures. Mean success: Nano+NCC 48 %, CSRT 41 %, ViT 42 %, KCF 23 %;
+~3 ms per target vs ~10 ms for CSRT. Nano with its own score reaches 57 %
+but reports vanished targets as visible (539 frames) and swaps identity on
+crossing_targets (279 frames); NCC scoring brings both to 0.
+
+**Tradeoff:** Nano+NCC does not re-find a target after it disappears
+(0/5); reacquisition is Phase 4's job, with identity checks. The quality
+model still misses partial occlusion (partial→DEGRADED ≤ 28 % for all).

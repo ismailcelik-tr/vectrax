@@ -14,7 +14,7 @@ from vectrax.sources import CameraSource
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackManager, TrackSnapshot
-from vectrax.tracking.propagators import CsrtPropagator, Propagator
+from vectrax.tracking.propagators import NanoPropagator, Propagator, ScoreSource
 from vectrax.tracking.state import Command
 
 __all__ = ["Pipeline", "PipelineThread", "Tick", "build_camera_pipeline", "build_file_pipeline"]
@@ -156,7 +156,8 @@ def _assemble(source, cfg, clock, mode, scale, propagator_factory=None):
     bus = EventBus()
     # Worker threads live for the process; OpenCV releases the GIL in CSRT.
     executor = ThreadPoolExecutor(PROPAGATOR_WORKERS, thread_name_prefix="propagator")
-    factory = propagator_factory or (lambda: CsrtPropagator(scale))
+    # ADR-008: NanoTrack, scored by NCC so a vanished target is not reported visible.
+    factory = propagator_factory or (lambda: NanoPropagator(scale, score=ScoreSource.NCC))
     manager = TrackManager(cfg, factory, bus, executor)
     return Pipeline(source, manager, bus, clock or MonotonicClock(), mode)
 

@@ -83,7 +83,7 @@ measured. Open issues carried forward: reacquisition, identity hijack,
    after absence, identity hijack); detection P/R/AP50 for cup/person and
    class-agnostic recall for non_coco; GT frame-0 boxes as operator input.
    CSRT baseline on all 8 fixtures.
-2b Propagators: CSRT, KCF, ViTTrack (OpenCV Zoo, Apache-2.0), NanoTrack
+2b [done → ADR-008 NanoTrack+NCC] Propagators: CSRT, KCF, ViTTrack (OpenCV Zoo, Apache-2.0), NanoTrack
    (only if licence verifies). Accuracy + ms/target → ADR-008.
 2c Detectors: YOLO26n, YOLO11n (AGPL, reference only); RF-DETR-N, D-FINE-N
    (Apache-2.0, runtime candidates). Backends: PyTorch CPU/MPS, ONNX Runtime

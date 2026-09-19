@@ -23,8 +23,14 @@ eval = [
 ]
 ml = [
     "coremltools>=9.0",
+    "onnx",
     "onnxruntime>=1.30.0",
+    "rfdetr==1.10.1",
     "torch>=2.14.0",
+    "transformers>=5.1.0,<6",
+]
+reference = [
+    "ultralytics==8.4.155",
 ]
 
 [tool.uv.sources]
@@ -46,3 +52,5 @@ packages = ["src/vectrax"]
 
 [tool.uv]
 default-groups = "all"
+# opencv-python would overwrite cv2 from opencv-contrib-python (trackers).
+override-dependencies = ["opencv-python; sys_platform == 'never'"]

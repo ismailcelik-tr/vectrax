@@ -11,9 +11,12 @@ Every install made for VectraX outside the repo is recorded here, so
 | Recordings, model weights | `data/`, `models/` (git-ignored) | — |
 
 Dependency groups: default (runtime), `dev` (pytest, ruff), `ml` (torch,
-onnxruntime, coremltools — benchmarks only), `eval` (TrackEval),
+onnx, onnxruntime, coremltools, rfdetr, transformers — benchmarks only),
+`reference` (ultralytics, AGPL-3.0 — benchmark reference only, R5), `eval` (TrackEval),
 `annotate` (SAM 2 from facebookresearch/sam2 @ 2b90b9f, Apache-2.0; the PyPI
 `sam2` package is an unofficial fork and is not used).
+`opencv-python` (pulled by ultralytics and supervision) is overridden out
+in `pyproject.toml`; it would overwrite `cv2` from opencv-contrib-python.
 
 Model weights in `models/` (git-ignored):
 | File | Source | SHA-256 |
@@ -21,6 +24,10 @@ Model weights in `models/` (git-ignored):
 | `trackers/vittrack_2023sep.onnx` (0.7 MB) | opencv/opencv_zoo (Apache-2.0) | `2990f0b7cd44d92afa48cd97db6de7be113fc1d9594fddb74e2725c10478e91d` |
 | `trackers/nanotrack_backbone_sim.onnx` (1.1 MB) | HonglinChu/SiamTrackers nanotrackv2 (Apache-2.0) | `530bdd0cd00f19afab79a863e71ba71e3312395a5dc9151af675082bdaaa2fc4` |
 | `trackers/nanotrack_head_sim.onnx` (0.7 MB) | same | `0d8c0637be849f092cc7236cae02e55c8b9455ebe37ba50601d6115db4247cd9` |
+| `detectors/yolo26n.pt` (5.5 MB) | ultralytics/assets v8.4.0 (AGPL-3.0, reference only) | `9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef` |
+| `detectors/yolo11n.pt` (5.6 MB) | same | `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1` |
+| `detectors/rf-detr-nano.pth` (366 MB) | storage.googleapis.com/rfdetr/nano_coco/checkpoint_best_regular.pth (Apache-2.0; MD5 matches rfdetr 1.10.1) | `d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d` |
+| `detectors/dfine-nano-coco/` (15 MB) | huggingface.co/ustc-community/dfine-nano-coco @ 066438d (Apache-2.0) | `19e06bdc873da819920a8d373b879721a5b9759d822f8213220bb09abbdab58b` (model.safetensors) |
 | `sam2/sam2.1_hiera_small.pt` (184 MB) | dl.fbaipublicfiles.com/segment_anything_2/092824/ | `6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38` |
 
 ## Outside the project

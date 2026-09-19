@@ -42,7 +42,7 @@ def _env():
         "macos": platform.mac_ver()[0],
         "python": platform.python_version(),
         "git_sha": _run(["git", "rev-parse", "--short", "HEAD"]),
-        "git_dirty": bool(_run(["git", "status", "--porcelain"])),
+        "git_dirty": bool(_run(["git", "status", "--porcelain", "--untracked-files=no"])),
         "power": _run(["pmset", "-g", "batt"]).splitlines()[0],
     }
 

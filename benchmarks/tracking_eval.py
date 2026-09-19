@@ -83,7 +83,7 @@ def main():
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     report = {"propagator": args.propagator, "git_sha": _git("rev-parse", "--short", "HEAD"),
-              "git_dirty": bool(_git("status", "--porcelain")), "macos": platform.mac_ver()[0], "fixtures": rows}
+              "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")), "macos": platform.mac_ver()[0], "fixtures": rows}
     out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{args.propagator}.json"
     out.write_text(json.dumps(report, indent=2))
     print(f"\nSaved {out}")

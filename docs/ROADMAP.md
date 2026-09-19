@@ -74,5 +74,5 @@ measured. Open issues carried forward: reacquisition, identity hijack,
 - [x] CVAT up; fixtures annotated (MOT 1.1): occlusion, single_target,
       crossing_targets by owner; near_targets, exit_reentry, fast_motion,
       non_coco pre-labeled with SAM 2 (owner reviewed near_targets)
-- [ ] Owner review: exit_reentry, fast_motion, non_coco
+- [x] Owner reviewed all 7; exported to data/fixtures/*.gt.zip (CVAT stopped)
 - [ ] Phase 2: detector/backend benchmark → reacquisition, identity hijack

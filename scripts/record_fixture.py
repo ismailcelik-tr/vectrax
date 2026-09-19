@@ -12,15 +12,13 @@ import json
 import platform
 import queue
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
 
 import cv2
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from avf_capture import AvfCapture, ensure_permission, find_device
+from vectrax.sources.avf import AvfCapture, ensure_permission, find_device
 
 DEFAULT_COUNTDOWN_S = 3
 WRITE_QUEUE_FRAMES = 60

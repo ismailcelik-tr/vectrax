@@ -1,4 +1,4 @@
-"""AVFoundation capture shared by Phase 0 scripts. Prototype of MacCamera."""
+"""AVFoundation driver. Raw capture callbacks; MacCamera builds on it."""
 
 import threading
 import time

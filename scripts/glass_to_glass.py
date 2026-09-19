@@ -13,7 +13,6 @@ Usage:
 
 import argparse
 import json
-import sys
 import threading
 import time
 from pathlib import Path
@@ -21,8 +20,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from avf_capture import AvfCapture, ensure_permission, find_device
+from vectrax.sources.avf import AvfCapture, ensure_permission, find_device
 
 TOGGLES = 60
 HALF_PERIOD_S = 0.5

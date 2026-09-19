@@ -10,7 +10,6 @@ __all__ = ["FramePacket", "PixelFormat"]
 
 class PixelFormat(Enum):
     BGR = "bgr"
-    BGRA = "bgra"
 
 
 @dataclass(frozen=True, slots=True)

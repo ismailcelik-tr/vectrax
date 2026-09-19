@@ -13,9 +13,8 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 
 ## Phase 1 — walking skeleton (approved 2026-09-19)
 Steps, one commit each, test first:
-- [ ] clock, frames
-- [ ] sources: FileSource (sidecar timestamps), MacCamera
-- [ ] LatestFrameBuffer
+- [x] clock, frames
+- [x] LatestFrameBuffer, sources: FileSource (sidecar timestamps), MacCamera
 - [ ] Kalman (constant velocity), TrackState transitions, TrackQuality
 - [ ] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
 - [ ] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`

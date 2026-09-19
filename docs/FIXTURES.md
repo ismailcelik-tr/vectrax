@@ -9,7 +9,8 @@ Record: `uv run scripts/record_fixture.py --name <name> --seconds <s> --note "<t
 | Name | s | Content | Tests |
 |---|---|---|---|
 | `single_target` | 20 | Cup moved slowly across the desk | baseline propagation |
-| `crossing_targets` | 20 | Two similar objects cross paths twice | ID switch |
+| `crossing_targets` | 20 | Two similar cups swap sides twice | ID switch |
+| `near_targets` | 20 | Two similar cups approach and overlap, no swap | association under proximity |
 | `occlusion` | 25 | Cup hidden behind a book 1–3 s, three times | OCCLUDED → TRACKING |
 | `exit_reentry` | 25 | Owner walks out of frame, returns after ~3 s | LOST → reacquisition |
 | `fast_motion` | 15 | Cup moved fast, with direction changes | propagator limits, blur |

@@ -155,7 +155,7 @@ class _Delegate(NSObject, protocols=[objc.protocolNamed("AVCaptureVideoDataOutpu
         r["pts_s"].append(pts)
         r["delivery_s"].append(host_now - pts)
         r["copy"].append(copy_ns)
-        r["shape"] = img.shape
+        r["shapes"].append(img.shape)
         if len(r["arrival"]) >= r["target"]:
             r["done"].set()
 
@@ -188,7 +188,7 @@ def _set_format(device, width, height, fps):
 def _probe_avf(device, width, height, fps, frames):
     total = frames + WARMUP_FRAMES
     rec = {"arrival": [], "pts_s": [], "delivery_s": [], "copy": [], "dropped": 0,
-           "target": total, "done": threading.Event(), "shape": None}
+           "target": total, "done": threading.Event(), "shapes": []}
 
     session = AVF.AVCaptureSession.alloc().init()
     dev_input, err = AVF.AVCaptureDeviceInput.deviceInputWithDevice_error_(device, None)
@@ -206,12 +206,14 @@ def _probe_avf(device, width, height, fps, frames):
     session.beginConfiguration()
     session.addInput_(dev_input)
     session.addOutput_(output)
-    _set_format(device, width, height, fps)
     session.commitConfiguration()
 
     t_open = time.monotonic_ns()
     with _CpuMeter() as cpu:
         session.startRunning()
+        # macOS: startRunning re-applies the session preset and overrides
+        # activeFormat; InputPriority preset is unsupported. Set it after.
+        _set_format(device, width, height, fps)
         finished = rec["done"].wait(total / fps * 3 + 10)
         session.stopRunning()
 
@@ -221,9 +223,11 @@ def _probe_avf(device, width, height, fps, frames):
     arrival = rec["arrival"][WARMUP_FRAMES:]
     pts_ns = (np.asarray(rec["pts_s"][WARMUP_FRAMES:]) * NS_PER_S).astype(np.int64)
     delivery_ns = np.asarray(rec["delivery_s"][WARMUP_FRAMES:]) * NS_PER_S
+    shapes = rec["shapes"][WARMUP_FRAMES:]
     return {
         "method": METHOD_AVF,
-        "actual_shape": list(rec["shape"]),
+        "actual_shape": list(shapes[-1]),
+        "shape_mismatch_frames": sum(s[:2] != (height, width) for s in shapes),
         "first_frame_ms": round((rec["arrival"][0] - t_open) / NS_PER_MS, 1),
         "arrival": _timing(arrival, fps),
         "sensor_pts_interval_ms": _stats_ms(np.diff(pts_ns)),
@@ -326,7 +330,7 @@ def _print(result):
         if key in result:
             print(f"  {key}: {result[key]}")
 
-    for key in ("avf_dropped", "index_check"):
+    for key in ("avf_dropped", "shape_mismatch_frames", "index_check"):
         if key in result:
             print(f"  {key}: {result[key]}")
 

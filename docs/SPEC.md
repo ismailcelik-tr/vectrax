@@ -5,16 +5,18 @@ Real-time, operator-driven visual tracking and camera guidance for
 non-weaponized use (monitoring, robotics, inspection, research). The operator
 chooses targets. v1 never actuates hardware; guidance is displayed only.
 
-## Open requirements — owner answers before Phase 2
-- R1 Target domain: people / vehicles / arbitrary operator-boxed objects.
-  Decides detector class set, open-vocabulary need, SOT vs MOT emphasis.
-- R2 Scene: indoor/outdoor, target size in pixels, motion speed.
-- R3 Latency goal: p95 capture→guidance ≤ ? ms at ? fps, ? resolution.
-- R4 Max simultaneous targets.
-- R5 License: research-only or commercial? (Ultralytics = AGPL-3.0;
-  MOT17/MOT20 = non-commercial.)
-- R6 Recording privacy: retention, storage location, face blurring.
-Decisions depending on an unanswered R are PROVISIONAL.
+## Requirements (answered 2026-09-19)
+- R1 Target domain: arbitrary operator-boxed objects. Class-agnostic
+  Propagator (SOT) is the primary path; detector classes are hints only.
+- R2 Scene: indoor desk/room, near range, moderate motion.
+- R3 Latency goal: p95 capture→guidance ≤ 100 ms at 30 fps, 720p.
+- R4 Targets: v1 meets R3 with 1–3 targets. 10+ is the next milestone,
+  scoped by measured per-target cost.
+- R5 License: research now, possibly commercial later. Runtime
+  dependencies must be commercial-safe (Apache/MIT/BSD). AGPL models and
+  non-commercial datasets are allowed only as benchmark references.
+- R6 Recording privacy: local only (data/, git-ignored), no blurring.
+  Record only the owner and consenting people.
 
 ## Non-goals (v1)
 Physical camera control. Weapon/engagement logic. Microservices, brokers,
@@ -91,14 +93,15 @@ experiment. Public datasets only if R5 permits.
 
 ## Model evaluation
 Detectors (small matrix): one Ultralytics nano (YOLO11n or YOLO26n) as
-reference; one Apache-2.0 alternative (RF-DETR nano, D-FINE-N or YOLOX-nano);
-open-vocabulary (YOLOE/YOLO-World) only if R1 = arbitrary objects.
+reference only (R5); Apache-2.0 candidates (RF-DETR nano, D-FINE-N or
+YOLOX-nano) for runtime; a class-agnostic or open-vocabulary option for
+reacquisition of arbitrary objects (R1), license checked before use.
 Backends: PyTorch CPU, PyTorch MPS, Core ML (CPU/GPU/ANE compute units),
 ONNX Runtime CPU + CoreML EP. Export/compile time reported separately.
 Quality: mAP on a fixed COCO val subset (sanity) + precision/recall on
 fixtures. Tracking: HOTA, IDF1, ID switches (TrackEval) on fixtures.
 Re-ID ladder: none → color histogram → generic embedding (e.g. DINOv2-S).
-OSNet only if R1 = people.
+OSNet is out (person-only, R1).
 Protocol: on AC power, Low Power Mode off, warm-up excluded, sustained runs
 long enough to expose throttling; record macOS, Python, package versions,
 git SHA. Accelerator usage needs `powermetrics` (sudo): ask the owner.

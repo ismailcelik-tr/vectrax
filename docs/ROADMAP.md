@@ -15,7 +15,7 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 Steps, one commit each, test first:
 - [x] clock, frames
 - [x] LatestFrameBuffer, sources: FileSource (sidecar timestamps), MacCamera
-- [ ] Kalman (constant velocity), TrackState transitions, TrackQuality
+- [x] Kalman (constant velocity), TrackState transitions, TrackQuality
 - [ ] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
 - [ ] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
 - [ ] OpenCV UI (ADR-005 threading) — owner verifies on camera

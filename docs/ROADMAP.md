@@ -37,6 +37,26 @@ Headless, init box 795,297,113,143. Not yet in PERFORMANCE.md (no GT).
   reads OCCLUDED while the cup is visible. Propagator alone cannot tell
   occlusion from drift; detector/reacquisition must (Phase 3–4).
 
+### Live sessions 2026-09-19 (data/sessions/, replayed headless)
+| Session | Targets | capture→render p50/p95 ms | Finding |
+|---|---|---|---|
+| occlusion_live | 1 cup | 78.3 / 88.7 | Book hides cup (f449) → OCCLUDED, correct. Cup returns (~f510), box stuck by the hand → LOST f538. No reacquisition. |
+| two_cups_live | 2 cups | 91.2 / 103.9 | 1st crossing OK. 2nd (f414–418): printed cup passes in front, id 2 jumps onto it with score 0.79 → both ids on one cup. Score cannot tell two white cups apart; manager allows two tracks on one object. |
+| pupils_live | 2 eyes + cup | 100.4 / 131.5 | Eyes tracked well until the cup crosses the face (f858, f948) → OCCLUDED → LOST. Boxes cover the whole eye, not the pupil. |
+
+Latency figures include frames before selection; not a controlled benchmark.
+
+Root causes, in order of evidence:
+1. Bug: Kalman prediction during OCCLUDED runs away (x −2109) and size goes
+   negative (w −72). Needs velocity damping and size/position clamps.
+2. No reacquisition after occlusion (occlusion_live, pupils_live). CSRT keeps
+   learning the occluder.
+3. Identity hijack (two_cups_live): grayscale NCC score too weak; no rule
+   against two tracks on one object.
+4. TRACKING/DEGRADED flapping around good_quality: needs hysteresis.
+5. R3 (p95 ≤ 100 ms) met with 1 target only; ~8–10 ms CSRT per target plus
+   ~14 ms render.
+
 ## Next after Phase 1
 - Propagator benchmark: CSRT vs NanoTrack vs ViTTrack on annotated fixtures.
 - State hysteresis for TRACKING/DEGRADED.

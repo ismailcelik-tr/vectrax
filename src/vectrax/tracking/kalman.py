@@ -22,7 +22,7 @@ class CvKalman:
 
     @property
     def box(self) -> Box:
-        return Box(*self._x[:_DIM])
+        return Box(*(float(v) for v in self._x[:_DIM]))
 
     @property
     def velocity(self) -> tuple[float, float]:

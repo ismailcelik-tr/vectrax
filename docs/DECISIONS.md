@@ -49,3 +49,19 @@ operator experiences); separate budgets for both.
 
 **Consequence:** About 40 ms (MacBook) remains for processing, rendering
 excluded. Every stage budget derives from this.
+
+## ADR-004 CSRT as baseline propagator (2026-09-19, PROVISIONAL)
+
+**Decision:** Phase 1 uses OpenCV CSRT behind the `Propagator` interface.
+Score = NCC between the initial appearance and the current box, both
+downsized to 32 px and blurred (σ 1.5) so small misalignment does not
+read as appearance change.
+
+**Alternatives:** KCF, MIL (weaker), NanoTrack, ViTTrack, DaSiamRPN
+(need ONNX weights). Compared in a benchmark after Phase 1.
+
+**Why first:** no model files, class-agnostic (R1), Apache-2.0 (R5).
+
+**Known limits:** CSRT reports no confidence; NCC against the initial
+template drops when the object rotates or changes pose. Cost per target
+at 720p unmeasured; a `scale` option runs it downsized.

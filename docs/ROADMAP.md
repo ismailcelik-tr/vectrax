@@ -16,7 +16,7 @@ Steps, one commit each, test first:
 - [x] clock, frames
 - [x] LatestFrameBuffer, sources: FileSource (sidecar timestamps), MacCamera
 - [x] Kalman (constant velocity), TrackState transitions, TrackQuality
-- [ ] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
+- [x] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
 - [ ] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
 - [ ] OpenCV UI (ADR-005 threading) — owner verifies on camera
 - [ ] Latency 1 and 3 targets → PERFORMANCE.md

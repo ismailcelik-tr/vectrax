@@ -6,7 +6,7 @@ Every install made for VectraX outside the repo is recorded here, so
 ## Inside the project (removed by deleting the folder)
 | What | Where | Install |
 |---|---|---|
-| Python deps | `.venv/` | `uv sync --all-groups` |
+| Python deps | `.venv/` | `uv sync` (all groups by default) |
 | Brew snapshot, CVAT checkout | `tools/` (git-ignored) | — |
 | Recordings, model weights | `data/`, `models/` (git-ignored) | — |
 

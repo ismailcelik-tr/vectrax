@@ -11,5 +11,17 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 - [ ] Evening: low_light fixture
 - [ ] CVAT up, annotate fixtures, export MOT 1.1
 
-## Next: Phase 1 walking skeleton
-Starts when fixtures are recorded; annotation may finish in parallel.
+## Phase 1 — walking skeleton (approved 2026-09-19)
+Steps, one commit each, test first:
+- [ ] clock, frames
+- [ ] sources: FileSource (sidecar timestamps), MacCamera
+- [ ] LatestFrameBuffer
+- [ ] Kalman (constant velocity), TrackState transitions, TrackQuality
+- [ ] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
+- [ ] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
+- [ ] OpenCV UI (ADR-005 threading) — owner verifies on camera
+- [ ] Latency 1 and 3 targets → PERFORMANCE.md
+
+Acceptance: tests green, ruff clean; owner verifies UI; deterministic
+single_target run reproducible; latency measured, not claimed.
+REACQUIRING arrives in Phase 4.

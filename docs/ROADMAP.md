@@ -19,6 +19,8 @@ Steps, one commit each, test first:
 - [x] CsrtPropagator (ADR-004 PROVISIONAL), TrackManager, events
 - [x] metrics, pipeline (REALTIME / DETERMINISTIC), headless `--init-boxes`
 - [x] OpenCV UI (ADR-005 threading) — owner verification pending
+- [x] Pulled from Phase 6: `--record` session (video, stamps, operator.jsonl);
+      headless replay reproduces it; `--render-out` review video
 - [ ] Latency 1 and 3 targets → PERFORMANCE.md
 
 Acceptance: tests green, ruff clean; owner verifies UI; deterministic

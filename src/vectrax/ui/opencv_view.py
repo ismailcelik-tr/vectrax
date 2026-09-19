@@ -19,7 +19,7 @@ from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackSnapshot
 from vectrax.tracking.state import Command, TrackState
 
-__all__ = ["Action", "Controller", "draw", "load_init", "run_ui"]
+__all__ = ["TITLE_BAR_PT", "Action", "Controller", "draw", "load_init", "run_ui", "window_size"]
 
 WINDOW = "VectraX"
 MIN_DRAG_PX = 8
@@ -31,6 +31,10 @@ FPS_SMOOTHING = 0.9
 NS_PER_S = 1_000_000_000
 NS_PER_MS = 1_000_000
 HELP = "drag: select  click: focus  1-9: focus id  p: pause/resume  s: stop  x: remove  r: reselect  space: freeze  q: quit"
+PAUSED_HINT = "paused: p resumes tracking at this box; to follow a moved object press r and drag"
+TITLE_BAR_PT = 32
+SCREEN_FILL = 0.97
+FOCUS_PAD_PX = 5
 
 _COLORS = {
     TrackState.INITIALIZING: (255, 255, 0),
@@ -43,6 +47,7 @@ _COLORS = {
 }
 _PAUSABLE = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
 _DRAG_COLOR = (255, 0, 255)
+_FOCUS_COLOR = (255, 255, 255)
 _TEXT_COLOR = (255, 255, 255)
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -157,8 +162,10 @@ def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None
     for t in tracks:
         color = _COLORS[t.state]
         x, y, bw, bh = t.box.to_xywh_px(w, h)
-        thick = 3 if t.track_id == focus else 2
-        cv2.rectangle(out, (x, y), (x + bw, y + bh), color, thick)
+        cv2.rectangle(out, (x, y), (x + bw, y + bh), color, 2)
+        if t.track_id == focus:
+            pad = FOCUS_PAD_PX
+            cv2.rectangle(out, (x - pad, y - pad), (x + bw + pad, y + bh + pad), _FOCUS_COLOR, 2)
 
         trail = np.array([(round(cx * w), round(cy * h)) for cx, cy in t.trail], np.int32)
         cv2.polylines(out, [trail], False, color, 1)
@@ -176,6 +183,9 @@ def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None
         cv2.rectangle(out, (x, y), (x + bw, y + bh), _DRAG_COLOR, 2)
 
     lines = [" ".join(f"{k}={v}" for k, v in hud.items()), HELP]
+    focused = next((t for t in tracks if t.track_id == focus), None)
+    if focused is not None and focused.state is TrackState.PAUSED:
+        lines.append(PAUSED_HINT)
     for i, text in enumerate(lines):
         cv2.putText(out, text, (10, 20 + 18 * i), _FONT, 0.45, _TEXT_COLOR, 1)
 
@@ -194,16 +204,35 @@ def _save_init(path, rects):
     print(f"Saved init boxes to {path}")
 
 
-def _hud(pipe, tracks, fps, last_tick):
+def _hud(pipe, tracks, fps, last_tick, focus):
     counts = {}
     for t in tracks:
         counts[t.state.value] = counts.get(t.state.value, 0) + 1
 
-    hud = {"mode": pipe.mode.value, "fps": f"{fps:.1f}", "dropped": pipe.dropped}
+    hud = {"mode": pipe.mode.value, "fps": f"{fps:.1f}", "dropped": pipe.dropped,
+           "focus": "-" if focus is None else focus}
     if last_tick is not None and pipe.mode is RunMode.REALTIME:
         hud["age_ms"] = f"{(last_tick.timing.tracked_ns - last_tick.timing.capture_ns) / NS_PER_MS:.0f}"
 
     return hud | counts
+
+
+def window_size(frame_size, screen_size):
+    """Largest window with the frame's aspect that fits the screen (points)."""
+    fw, fh = frame_size
+    sw, sh = screen_size
+    scale = min(sw * SCREEN_FILL / fw, (sh - TITLE_BAR_PT) * SCREEN_FILL / fh)
+    return round(fw * scale), round(fh * scale)
+
+
+def _screen_size():
+    try:
+        from AppKit import NSScreen  # macOS only
+    except ImportError:
+        return None
+
+    frame = NSScreen.mainScreen().visibleFrame()
+    return frame.size.width, frame.size.height
 
 
 def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clock | None = None) -> dict:
@@ -215,6 +244,10 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
         pipe.select(Box.from_xywh_px(x, y, bw, bh, w, h))
 
     cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    # Resizing by hand stalls the loop (OpenCV); open at full size instead.
+    screen = _screen_size()
+    if screen is not None:
+        cv2.resizeWindow(WINDOW, *window_size((w, h), screen))
     cv2.setMouseCallback(WINDOW, lambda e, x, y, *_: ctl.on_mouse(e, x, y))
 
     # A clip starts frozen on frame 0 so targets can be drawn on it.
@@ -230,7 +263,7 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
                     break
 
                 pending = ctl.selected if last_tick is None else ()
-                hud = _hud(pipe, tracks, fps, last_tick)
+                hud = _hud(pipe, tracks, fps, last_tick, ctl.focus)
                 cv2.imshow(WINDOW, draw(shown.image, tracks, hud, ctl.focus, ctl.drag, pending))
                 key = cv2.waitKey(FROZEN_WAIT_MS)
             else:
@@ -255,7 +288,7 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
                 now = clock.now_ns()
                 fps = FPS_SMOOTHING * fps + (1 - FPS_SMOOTHING) * NS_PER_S / max(now - last_ns, 1)
                 last_ns = now
-                cv2.imshow(WINDOW, draw(frame.image, tracks, _hud(pipe, tracks, fps, last_tick), ctl.focus, ctl.drag))
+                cv2.imshow(WINDOW, draw(frame.image, tracks, _hud(pipe, tracks, fps, last_tick, ctl.focus), ctl.focus, ctl.drag))
                 key = cv2.waitKey(LIVE_WAIT_MS)
                 pipe.rendered(last_tick)
                 shown = frame

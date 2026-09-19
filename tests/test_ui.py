@@ -5,7 +5,7 @@ from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackSnapshot
 from vectrax.tracking.quality import TrackQuality
 from vectrax.tracking.state import Command, TrackState
-from vectrax.ui.opencv_view import Action, Controller, draw
+from vectrax.ui.opencv_view import TITLE_BAR_PT, Action, Controller, draw, window_size
 
 W, H = 640, 360
 CENTER = Box(0.5, 0.5, 0.2, 0.2)
@@ -134,3 +134,25 @@ def test_draw_does_not_modify_input():
     assert out.shape == img.shape
     assert not img.any()
     assert out.any()
+
+
+def test_focused_track_is_drawn_differently():
+    img = np.zeros((H, W, 3), np.uint8)
+    tracks = [_snap(1, TrackState.TRACKING)]
+
+    plain = draw(img, tracks, {}, focus=None)
+    focused = draw(img, tracks, {}, focus=1)
+
+    assert (plain != focused).any()
+
+
+def test_window_fits_screen_keeping_aspect():
+    w, h = window_size((1280, 720), (1512, 949))
+
+    assert w <= 1512 and h + TITLE_BAR_PT <= 949
+    assert abs(w / h - 1280 / 720) < 0.01
+    assert w > 1280
+
+
+def test_window_never_shrinks_below_frame_on_big_screen():
+    assert window_size((1280, 720), (3000, 2000))[0] >= 1280

@@ -1,0 +1,101 @@
+{
+  "device": {
+    "name": "Fox Kameras\u0131",
+    "id": "D79D41AE-D87C-4A73-9667-8DFF00000001",
+    "type": "AVCaptureDeviceTypeExternal"
+  },
+  "label": "wired",
+  "requested": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "frames": 600
+  },
+  "env": {
+    "macos": "27.0",
+    "python": "3.13.14",
+    "opencv": "5.0.0",
+    "git_sha": "1b3f0b0",
+    "power": "Now drawing from 'AC Power'",
+    "center_stage": false
+  },
+  "results": [
+    {
+      "method": "avf",
+      "actual_shape": [
+        720,
+        1280,
+        4
+      ],
+      "shape_mismatch_frames": 0,
+      "first_frame_ms": 1363.1,
+      "arrival": {
+        "frames": 600,
+        "effective_fps": 29.99,
+        "interval_ms": {
+          "mean": 33.344,
+          "p50": 33.365,
+          "p95": 34.685,
+          "p99": 35.648,
+          "max": 40.478
+        },
+        "gaps": 0
+      },
+      "sensor_pts_interval_ms": {
+        "mean": 33.333,
+        "p50": 33.33,
+        "p95": 33.34,
+        "p99": 33.34,
+        "max": 33.34
+      },
+      "pts_to_delivery_ms": {
+        "mean": 44.826,
+        "p50": 44.739,
+        "p95": 47.764,
+        "p99": 48.887,
+        "max": 52.549
+      },
+      "copy_to_numpy_ms": {
+        "mean": 0.318,
+        "p50": 0.327,
+        "p95": 0.597,
+        "p99": 0.827,
+        "max": 1.146
+      },
+      "avf_dropped": 0,
+      "cpu_percent": 4.4
+    },
+    {
+      "method": "opencv",
+      "index": 1,
+      "index_check": "verified via 1920x1440",
+      "actual_shape": [
+        720,
+        1280,
+        3
+      ],
+      "reported_fps": -1.0,
+      "first_frame_ms": 1191.9,
+      "arrival": {
+        "frames": 600,
+        "effective_fps": 29.98,
+        "interval_ms": {
+          "mean": 33.354,
+          "p50": 33.399,
+          "p95": 34.842,
+          "p99": 35.886,
+          "max": 38.501
+        },
+        "gaps": 0
+      },
+      "read_block_ms": {
+        "mean": 33.346,
+        "p50": 33.39,
+        "p95": 34.84,
+        "p99": 35.879,
+        "max": 38.492
+      },
+      "cpu_percent": 7.2
+    }
+  ]
+}

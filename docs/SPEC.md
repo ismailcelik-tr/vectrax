@@ -9,7 +9,8 @@ chooses targets. v1 never actuates hardware; guidance is displayed only.
 - R1 Target domain: arbitrary operator-boxed objects. Class-agnostic
   Propagator (SOT) is the primary path; detector classes are hints only.
 - R2 Scene: indoor desk/room, near range, moderate motion.
-- R3 Latency goal: p95 capture→guidance ≤ 100 ms at 30 fps, 720p.
+- R3 Latency goal: p95 sensor PTS→guidance ≤ 100 ms at 30 fps, 720p
+  (ADR-003).
 - R4 Targets: v1 meets R3 with 1–3 targets. 10+ is the next milestone,
   scoped by measured per-target cost.
 - R5 License: research now, possibly commercial later. Runtime
@@ -62,7 +63,7 @@ InferenceScheduler runs models on a worker; the tick never waits on it.
 - Future CUDA/TensorRT/edge: behind the model Backend interface only.
 
 ## Data structures (starting point, refine in code)
-FramePacket     {frame_id, source_id, capture_ns, source_pts?, image, w, h, pixel_format}
+FramePacket     {frame_id, source_id, capture_ns (sensor PTS), arrival_ns, image, w, h, pixel_format}
 Observation     {frame_id, capture_ns, bbox, score, class_id?, embedding?, origin}
 TrackState      {track_id, state, class_id?, bbox, kf_mean, kf_cov, quality,
                  history, last_obs_ns}
@@ -82,8 +83,9 @@ ambiguous candidates keep the track in REACQUIRING.
 ## Timing
 Stamps: capture, preprocess, infer_start/end, track, predict, guide, render.
 Report p50/p95/p99/max, frame age at render, queue depth, drops.
-capture_ns is arrival time, not exposure time. Measure glass-to-glass once
-externally (film a ms clock) and record it.
+capture_ns is the sensor PTS on the host monotonic clock (ADR-003); it may
+still lag exposure. Measure glass-to-glass once externally (film a ms
+clock) and record it.
 
 ## Evaluation data
 data/fixtures/: short clips recorded by the owner on this camera: single

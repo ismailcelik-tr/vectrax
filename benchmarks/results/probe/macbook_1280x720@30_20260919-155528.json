@@ -1,0 +1,101 @@
+{
+  "device": {
+    "name": "MacBook Pro Kameras\u0131",
+    "id": "6C707041-05AC-0011-0002-000000000001",
+    "type": "AVCaptureDeviceTypeBuiltInWideAngleCamera"
+  },
+  "label": "",
+  "requested": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "frames": 600
+  },
+  "env": {
+    "macos": "27.0",
+    "python": "3.13.14",
+    "opencv": "5.0.0",
+    "git_sha": "d72eeb5",
+    "power": "Now drawing from 'AC Power'",
+    "center_stage": false
+  },
+  "results": [
+    {
+      "method": "avf",
+      "actual_shape": [
+        720,
+        1280,
+        4
+      ],
+      "shape_mismatch_frames": 0,
+      "first_frame_ms": 518.0,
+      "arrival": {
+        "frames": 600,
+        "effective_fps": 30.0,
+        "interval_ms": {
+          "mean": 33.333,
+          "p50": 33.544,
+          "p95": 37.176,
+          "p99": 39.415,
+          "max": 45.178
+        },
+        "gaps": 0
+      },
+      "sensor_pts_interval_ms": {
+        "mean": 33.337,
+        "p50": 33.34,
+        "p95": 33.34,
+        "p99": 33.34,
+        "max": 33.34
+      },
+      "pts_to_delivery_ms": {
+        "mean": 55.771,
+        "p50": 56.772,
+        "p95": 60.675,
+        "p99": 63.251,
+        "max": 69.808
+      },
+      "copy_to_numpy_ms": {
+        "mean": 0.332,
+        "p50": 0.322,
+        "p95": 0.61,
+        "p99": 0.819,
+        "max": 1.113
+      },
+      "avf_dropped": 0,
+      "cpu_percent": 6.9
+    },
+    {
+      "method": "opencv",
+      "index": 0,
+      "index_check": "verified via 1080x1920",
+      "actual_shape": [
+        720,
+        1280,
+        3
+      ],
+      "reported_fps": -1.0,
+      "first_frame_ms": 746.3,
+      "arrival": {
+        "frames": 600,
+        "effective_fps": 30.0,
+        "interval_ms": {
+          "mean": 33.336,
+          "p50": 33.467,
+          "p95": 36.938,
+          "p99": 38.35,
+          "max": 41.429
+        },
+        "gaps": 0
+      },
+      "read_block_ms": {
+        "mean": 33.33,
+        "p50": 33.464,
+        "p95": 36.929,
+        "p99": 38.345,
+        "max": 41.422
+      },
+      "cpu_percent": 8.7
+    }
+  ]
+}

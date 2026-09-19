@@ -30,7 +30,7 @@ BGRA_CHANNELS = 4
 NS_PER_S = 1_000_000_000
 NS_PER_MS = 1_000_000
 PERMISSION_TIMEOUT_S = 60
-OUT_DIR = Path(__file__).resolve().parent.parent / "data" / "probe"
+OUT_DIR = Path(__file__).resolve().parent.parent / "benchmarks" / "results" / "probe"
 
 METHOD_AVF = "avf"
 METHOD_OPENCV = "opencv"

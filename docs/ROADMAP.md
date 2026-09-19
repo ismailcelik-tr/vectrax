@@ -66,9 +66,10 @@ deterministic replay reproduces runs (test + session replay); latency
 measured. Open issues carried forward: reacquisition, identity hijack,
 3-target latency.
 
-## Next after Phase 1 (decision pending)
-- Reacquisition + identity hijack: detector path (Phase 2–4) or a
-  detector-free interim (template/colour search).
-- Latency levers, unmeasured: render cost (~14 ms), propagators in
-  parallel threads, cheaper propagators (NanoTrack, ViTTrack), scale.
-- Propagator benchmark on annotated fixtures (needs CVAT annotation).
+## After Phase 1 (decided 2026-09-19: latency → annotation → Phase 2)
+- [x] Latency: parallel propagators, PipelineThread (ADR-006), R3 split
+      (ADR-007). R3a and R3b met for 1 and 3 targets. Format experiment:
+      no gain; frame age depends on lighting.
+- [ ] Evening: glass-to-glass (MacBook, iPhone wired), low_light fixture
+- [ ] CVAT up, annotate fixtures (MOT 1.1) — before Phase 2
+- [ ] Phase 2: detector/backend benchmark → reacquisition, identity hijack

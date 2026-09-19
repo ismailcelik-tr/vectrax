@@ -11,14 +11,27 @@ import time
 from pathlib import Path
 
 from vectrax.evaluation.runner import run_fixture
-from vectrax.tracking.propagators import CsrtPropagator
+from vectrax.tracking.propagators import (
+    CsrtPropagator,
+    KcfPropagator,
+    NanoPropagator,
+    ScoreSource,
+    VitPropagator,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "data" / "fixtures"
 OUT_DIR = Path(__file__).resolve().parent / "results" / "tracking"
 NAMES = ["single_target", "crossing_targets", "near_targets", "occlusion", "exit_reentry",
          "fast_motion", "non_coco", "low_light"]
-PROPAGATORS = {"csrt": CsrtPropagator}
+PROPAGATORS = {
+    "csrt": CsrtPropagator,
+    "kcf": KcfPropagator,
+    "vit": VitPropagator,
+    "vit_ncc": lambda: VitPropagator(score=ScoreSource.NCC),
+    "nano": NanoPropagator,
+    "nano_ncc": lambda: NanoPropagator(score=ScoreSource.NCC),
+}
 HIDDEN = ("occluded", "lost")
 
 

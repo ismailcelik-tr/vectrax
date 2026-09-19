@@ -18,6 +18,9 @@ onnxruntime, coremltools — benchmarks only), `eval` (TrackEval),
 Model weights in `models/` (git-ignored):
 | File | Source | SHA-256 |
 |---|---|---|
+| `trackers/vittrack_2023sep.onnx` (0.7 MB) | opencv/opencv_zoo (Apache-2.0) | `2990f0b7cd44d92afa48cd97db6de7be113fc1d9594fddb74e2725c10478e91d` |
+| `trackers/nanotrack_backbone_sim.onnx` (1.1 MB) | HonglinChu/SiamTrackers nanotrackv2 (Apache-2.0) | `530bdd0cd00f19afab79a863e71ba71e3312395a5dc9151af675082bdaaa2fc4` |
+| `trackers/nanotrack_head_sim.onnx` (0.7 MB) | same | `0d8c0637be849f092cc7236cae02e55c8b9455ebe37ba50601d6115db4247cd9` |
 | `sam2/sam2.1_hiera_small.pt` (184 MB) | dl.fbaipublicfiles.com/segment_anything_2/092824/ | `6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38` |
 
 ## Outside the project

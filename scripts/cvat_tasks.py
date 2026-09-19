@@ -3,6 +3,7 @@
   uv run scripts/cvat_tasks.py create fast_motion [single_target ...]
   uv run scripts/cvat_tasks.py export fast_motion
   uv run scripts/cvat_tasks.py list
+  uv run scripts/cvat_tasks.py import-prelabel non_coco --label object [--occluded 1:0,2:40]
 
 Credentials: tools/cvat_admin.txt. Exports land in data/fixtures/<name>.gt.zip.
 """
@@ -104,9 +105,48 @@ class Cvat:
         self.download(status["result_url"].removeprefix(self._url), dest)
         print(f"{name}: exported to {dest}")
 
+    def import_prelabel(self, name, label, occluded):
+        """SAM 2 keyframes (sam2_prelabel.py) → one track per object. A keyframe
+        without a mask ends the track with an outside shape until it reappears."""
+        task_id = self.task_id(name)
+        job = self._call("GET", f"/api/jobs?task_id={task_id}")["results"][0]["id"]
+        ann = self._call("GET", f"/api/jobs/{job}/annotations")
+        if ann["tracks"] or ann["shapes"]:
+            raise SystemExit(f"{name}: job {job} already has annotations; not overwriting")
+
+        project = self._call("GET", f"/api/tasks/{task_id}")["project_id"]
+        labels = {lb["name"]: lb["id"] for lb in self._call("GET", f"/api/labels?project_id={project}")["results"]}
+        pre = json.loads((FIXTURES / f"{name}.sam2.json").read_text())
+        tracks = []
+        for obj, seq in pre["objects"].items():
+            shapes, last = [], None
+            for frame, (box, _) in zip(pre["keyframes"], seq, strict=True):
+                if box is None:
+                    if last is not None:
+                        shapes.append(_rect(frame, last, outside=True))
+                        last = None
+                    continue
+
+                last = [float(v) for v in box]
+                shapes.append(_rect(frame, last, occluded=(obj, frame) in occluded))
+
+            tracks.append({"frame": shapes[0]["frame"], "label_id": labels[label], "group": 0,
+                           "source": "semi-auto", "shapes": shapes, "attributes": []})
+
+        self._call("PATCH", f"/api/jobs/{job}/annotations?action=create",
+                   {"version": ann["version"], "tags": [], "shapes": [], "tracks": tracks})
+        for t in self._call("GET", f"/api/jobs/{job}/annotations")["tracks"]:
+            outside = [s["frame"] for s in t["shapes"] if s["outside"]]
+            print(f"{name}: job {job} track {t['id']} keyframes={len(t['shapes'])} outside_at={outside}")
+
     def list(self):
         for t in self._call("GET", "/api/tasks?page_size=100")["results"]:
             print(f"{t['id']:3d} {t['name']:18s} frames={t['size']} status={t['status']}")
+
+
+def _rect(frame, points, outside=False, occluded=False):
+    return {"type": "rectangle", "frame": frame, "points": points, "outside": outside,
+            "occluded": occluded, "z_order": 0, "rotation": 0.0, "attributes": []}
 
 
 def _multipart(fields, file_path):
@@ -126,13 +166,22 @@ def _multipart(fields, file_path):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("action", choices=["create", "export", "list"])
+    p.add_argument("action", choices=["create", "export", "list", "import-prelabel"])
     p.add_argument("names", nargs="*")
+    p.add_argument("--label", choices=LABELS, help="import-prelabel: label for all tracks")
+    p.add_argument("--occluded", default="", help="import-prelabel: obj:frame[,obj:frame] keyframes to flag")
     args = p.parse_args()
 
     cvat = Cvat()
     if args.action == "list":
         cvat.list()
+        return
+
+    if args.action == "import-prelabel":
+        occluded = {tuple(item.split(":")) for item in args.occluded.split(",") if item}
+        occluded = {(obj, int(frame)) for obj, frame in occluded}
+        for name in args.names:
+            cvat.import_prelabel(name, args.label, occluded)
         return
 
     if not args.names:

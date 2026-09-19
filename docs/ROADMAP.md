@@ -71,5 +71,8 @@ measured. Open issues carried forward: reacquisition, identity hijack,
       (ADR-007). R3a and R3b met for 1 and 3 targets. Format experiment:
       no gain; frame age depends on lighting.
 - [ ] Evening: glass-to-glass (MacBook, iPhone wired), low_light fixture
-- [ ] CVAT up, annotate fixtures (MOT 1.1) — before Phase 2
+- [x] CVAT up; fixtures annotated (MOT 1.1): occlusion, single_target,
+      crossing_targets by owner; near_targets, exit_reentry, fast_motion,
+      non_coco pre-labeled with SAM 2 (owner reviewed near_targets)
+- [ ] Owner review: exit_reentry, fast_motion, non_coco
 - [ ] Phase 2: detector/backend benchmark → reacquisition, identity hijack

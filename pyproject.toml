@@ -26,3 +26,6 @@ ml = [
 
 [tool.uv.sources]
 trackeval = { git = "https://github.com/JonathonLuiten/TrackEval" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -7,9 +7,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # unrelated brew installs are not touched.
 BREW_ADDED="$ROOT/tools/brew_added.txt"
 CVAT_DIR="$ROOT/tools/cvat"
+# Images CVAT pulled; none existed before (docs/SETUP.md).
+DOCKER_ADDED="$ROOT/tools/docker_added.txt"
 
 if [[ -d "$CVAT_DIR" ]]; then
-  (cd "$CVAT_DIR" && docker compose down -v --rmi all)
+  (cd "$CVAT_DIR" && docker compose down -v)
+fi
+
+if [[ -s "$DOCKER_ADDED" ]]; then
+  xargs docker image rm < "$DOCKER_ADDED"
 fi
 
 if [[ -s "$BREW_ADDED" ]]; then

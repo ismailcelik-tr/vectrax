@@ -78,7 +78,7 @@ measured. Open issues carried forward: reacquisition, identity hijack,
 - [ ] Phase 2 (approved 2026-09-19), see below
 
 ## Phase 2 — evidence-based model selection
-2a Evaluation harness (no downloads): MOT GT loader; tracking metrics
+2a [done] Evaluation harness (no downloads): MOT GT loader; tracking metrics
    (success IoU≥0.5, state correctness vs visible/partial/absent, recovery
    after absence, identity hijack); detection P/R/AP50 for cup/person and
    class-agnostic recall for non_coco; GT frame-0 boxes as operator input.

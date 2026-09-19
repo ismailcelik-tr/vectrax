@@ -22,7 +22,7 @@ import cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from avf_capture import AvfCapture, ensure_permission, find_device
 
-COUNTDOWN_S = 3
+DEFAULT_COUNTDOWN_S = 3
 WRITE_QUEUE_FRAMES = 60
 PREVIEW_SCALE = 0.5
 CRF = 12
@@ -49,6 +49,7 @@ def main():
     p.add_argument("--height", type=int, default=720)
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--note", default="", help="what happens in the clip")
+    p.add_argument("--countdown", type=float, default=DEFAULT_COUNTDOWN_S)
     args = p.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,7 +103,7 @@ def main():
     rec_start = None
     while True:
         now = time.monotonic()
-        if rec_start is None and now - start >= COUNTDOWN_S:
+        if rec_start is None and now - start >= args.countdown:
             rec_start = now
             recording.set()
 
@@ -113,7 +114,7 @@ def main():
         if frame is not None:
             shown = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR), None, fx=PREVIEW_SCALE, fy=PREVIEW_SCALE)
             if rec_start is None:
-                label = f"{args.name}: starts in {COUNTDOWN_S - (now - start):.0f}"
+                label = f"{args.name}: starts in {args.countdown - (now - start):.0f}"
                 color = (0, 200, 255)
             else:
                 label = f"REC {args.name} {now - rec_start:.1f}/{args.seconds:.0f}s"

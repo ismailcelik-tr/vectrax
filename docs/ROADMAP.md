@@ -80,9 +80,9 @@ measured. Open issues carried forward: reacquisition, identity hijack,
 ## Phase 2 — evidence-based model selection
 2a [done] Evaluation harness (no downloads): MOT GT loader; tracking metrics
    (success IoU≥0.5, state correctness vs visible/partial/absent, recovery
-   after absence, identity hijack); detection P/R/AP50 for cup/person and
-   class-agnostic recall for non_coco; GT frame-0 boxes as operator input.
-   CSRT baseline on all 8 fixtures.
+   after absence, identity hijack); GT frame-0 boxes as operator input.
+   CSRT baseline on all 8 fixtures. Detection P/R/AP50 (cup/person,
+   class-agnostic recall for non_coco) was missing; added in 2c.
 2b [done → ADR-008 NanoTrack+NCC] Propagators: CSRT, KCF, ViTTrack (OpenCV Zoo, Apache-2.0), NanoTrack
    (only if licence verifies). Accuracy + ms/target → ADR-008.
 2c Detectors: YOLO26n, YOLO11n (AGPL, reference only); RF-DETR-N, D-FINE-N

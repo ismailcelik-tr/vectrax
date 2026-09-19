@@ -5,7 +5,7 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 ## Phase 0 — in progress
 - [x] Environment inspection (docs/ENVIRONMENT.md)
 - [x] Camera probe, ADR-001..003 (docs/PERFORMANCE.md)
-- [ ] Fixtures: single_target, crossing_targets, occlusion, exit_reentry, fast_motion
+- [x] Fixtures: single_target, crossing_targets, near_targets, occlusion, exit_reentry, fast_motion
 - [ ] Optional fixture: non_coco (R1 test)
 - [ ] Evening (dark room): glass-to-glass MacBook + iPhone wired → close ADR-002
 - [ ] Evening: low_light fixture

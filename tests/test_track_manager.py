@@ -164,3 +164,30 @@ def test_tracks_are_independent():
 
     assert snaps[a].state is S.PAUSED
     assert snaps[b].state is S.TRACKING
+
+
+def test_parallel_propagation_matches_sequential():
+    from concurrent.futures import ThreadPoolExecutor
+
+    import cv2
+
+    from vectrax.tracking.propagators import CsrtPropagator
+
+    rng = np.random.default_rng(3)
+    background = rng.integers(60, 120, (240, 320, 3), dtype=np.uint8)
+    patch = cv2.GaussianBlur(rng.integers(0, 256, (30, 30, 3), dtype=np.uint8), (0, 0), 3)
+
+    def frame(i):
+        img = background.copy()
+        img[50:80, 20 + 3 * i:50 + 3 * i] = patch
+        img[150:180, 250 - 3 * i:280 - 3 * i] = patch
+        return FramePacket(i, "t", i * FRAME_NS, i * FRAME_NS, img, PixelFormat.BGR)
+
+    def run(executor):
+        mgr = TrackManager(CFG, CsrtPropagator, EventBus(), executor=executor)
+        mgr.select(Box.from_xywh_px(20, 50, 30, 30, 320, 240))
+        mgr.select(Box.from_xywh_px(250, 150, 30, 30, 320, 240))
+        return [mgr.step(frame(i)) for i in range(20)]
+
+    with ThreadPoolExecutor(2) as pool:
+        assert run(pool) == run(None)

@@ -6,6 +6,7 @@ of the next step, so every change is tied to a frame and replays identically.
 
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Executor
 from dataclasses import dataclass
 from enum import Enum, auto
 
@@ -68,8 +69,12 @@ class _Track:
 
 
 class TrackManager:
-    def __init__(self, cfg: TrackingConfig, propagator_factory: Callable[[], Propagator], bus: EventBus):
+    def __init__(self, cfg: TrackingConfig, propagator_factory: Callable[[], Propagator], bus: EventBus,
+                 executor: Executor | None = None):
+        """executor: runs propagators of different tracks in parallel. Each
+        propagator touches only its own track, so results match sequential."""
         self._cfg = cfg
+        self._executor = executor
         self._factory = propagator_factory
         self._bus = bus
         self._tracks: dict[int, _Track] = {}
@@ -93,11 +98,17 @@ class TrackManager:
         for op in pending:
             self._apply(op, frame)
 
-        for t in self._tracks.values():
-            if t.state not in _UPDATED or t.frame_id == frame.frame_id:
-                continue
+        due = [t for t in self._tracks.values() if t.state in _UPDATED and t.frame_id != frame.frame_id]
+        for t in due:
+            t.kf.predict(frame.capture_ns)
 
-            self._update(t, frame)
+        if self._executor is not None and len(due) > 1:
+            observations = list(self._executor.map(lambda t: t.prop.update(frame), due))
+        else:
+            observations = [t.prop.update(frame) for t in due]
+
+        for t, obs in zip(due, observations, strict=True):
+            self._update(t, frame, obs)
 
         return [self._snapshot(t) for t in self._tracks.values()]
 
@@ -151,10 +162,8 @@ class TrackManager:
         t.state_since = frame.capture_ns
         self._transition(t, TrackState.INITIALIZING, frame)
 
-    def _update(self, t, frame):
+    def _update(self, t, frame, obs):
         ns = frame.capture_ns
-        t.kf.predict(ns)
-        obs = t.prop.update(frame)
         residual = t.kf.residual(obs.box) if obs else None
         t.quality = TrackQuality(obs.score if obs else None, residual)
         q = t.quality.combined(self._cfg)

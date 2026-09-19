@@ -1,5 +1,6 @@
 """Pipeline tick: source → TrackManager → snapshots. The UI talks only to this layer."""
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from vectrax.tracking.state import Command
 __all__ = ["Pipeline", "Tick", "build_camera_pipeline", "build_file_pipeline"]
 
 READ_TIMEOUT_S = 0.1
+PROPAGATOR_WORKERS = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,7 +113,9 @@ def _box_list(box):
 
 def _assemble(source, cfg, clock, mode, renders, scale):
     bus = EventBus()
-    manager = TrackManager(cfg, lambda: CsrtPropagator(scale), bus)
+    # Worker threads live for the process; OpenCV releases the GIL in CSRT.
+    executor = ThreadPoolExecutor(PROPAGATOR_WORKERS, thread_name_prefix="propagator")
+    manager = TrackManager(cfg, lambda: CsrtPropagator(scale), bus, executor)
     return Pipeline(source, manager, bus, clock or MonotonicClock(), mode, renders)
 
 

@@ -57,3 +57,14 @@ def test_missing_render_is_skipped():
     m.observe(_timing(render=False))
 
     assert m.summary()["capture_to_render_ms"] is None
+
+
+def test_warmup_frames_are_excluded():
+    m = Metrics(RunMode.REALTIME, warmup_frames=2)
+    for _ in range(5):
+        m.observe(_timing())
+
+    s = m.summary()
+
+    assert s["frames"] == 3
+    assert s["track_ms"]["n"] == 3

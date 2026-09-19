@@ -49,8 +49,9 @@ class Metrics:
     """In DETERMINISTIC mode capture_ns comes from a recording, so spans
     against it are meaningless; only processing time is reported."""
 
-    def __init__(self, mode: RunMode):
+    def __init__(self, mode: RunMode, warmup_frames: int = 0):
         self.mode = mode
+        self._warmup = warmup_frames
         self._frames = 0
         self._spans = {"track_ms": LatencyStats()}
         if mode is RunMode.REALTIME:
@@ -58,6 +59,10 @@ class Metrics:
                 self._spans[name] = LatencyStats()
 
     def observe(self, t: FrameTiming) -> None:
+        if self._warmup > 0:
+            self._warmup -= 1
+            return
+
         self._frames += 1
         self._spans["track_ms"].add(t.tracked_ns - t.tick_ns)
         if self.mode is not RunMode.REALTIME:

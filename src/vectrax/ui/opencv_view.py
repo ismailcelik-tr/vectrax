@@ -235,7 +235,9 @@ def _screen_size():
     return frame.size.width, frame.size.height
 
 
-def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clock | None = None) -> dict:
+def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clock | None = None,
+           max_frames: int | None = None) -> dict:
+    """max_frames: stop after that many processed frames (benchmarks)."""
     clock = clock or MonotonicClock()
     live = pipe.mode is RunMode.REALTIME
     w, h = pipe.frame_size
@@ -256,6 +258,7 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
     shown, tracks, last_tick = first, [], None
     anchor = None
     fps, last_ns = 0.0, clock.now_ns()
+    processed = 0
     try:
         while True:
             if frozen:
@@ -292,6 +295,9 @@ def run_ui(pipe: Pipeline, init_boxes, init_path: Path | None = None, clock: Clo
                 key = cv2.waitKey(LIVE_WAIT_MS)
                 pipe.rendered(last_tick)
                 shown = frame
+                processed += 1
+                if max_frames is not None and processed >= max_frames:
+                    break
 
             action = ctl.on_key(key) if key != KEY_NONE else Action.NONE
             if action is Action.QUIT:

@@ -125,3 +125,21 @@ Steps, one commit each, test first:
 
 Acceptance: tests green, ruff clean; deterministic replay reproduces runs;
 R3a p95 ≤ 100 ms with detection on; owner verifies on camera.
+
+### Found while demoing (2026-09-20, data/sessions/demo_detect)
+- NanoTrack's box oscillates on a 3-frame rhythm even on a still scene: run
+  alone on f303-333 the y jumps 254 → 246 → 239 → 257 while its own score
+  holds at 0.81. Our NCC follows the box, so the quality score alternates
+  0.84 / 0.57 / 0.42. Confirmation needed three consecutive good frames, never
+  got them, and the paper went LOST after the 1 s init timeout. Fixed by
+  counting good frames in a window (confirm 3 of 9); the same session now
+  confirms at f307 and never goes LOST. Fixture scores unchanged.
+- Open: the NCC score collapses when the box slides a few pixels on a
+  low-texture object. That is the quality model, not the propagator —
+  Phase 4, together with the false-OCCLUDED case.
+- Open: two tracks may sit on the same object. Both pupils selected in that
+  session merged onto one after an occlusion (631 of 726 frames at IoU ≥ 0.5,
+  centres 0.5-4 px apart). The detector cannot help: a pupil box overlaps no
+  COCO detection (max IoU 0.01 over 23 sampled frames). Needs a
+  one-track-per-object rule in TrackManager, and appearance to tell the two
+  apart (Phase 4).

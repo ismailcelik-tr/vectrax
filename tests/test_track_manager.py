@@ -191,3 +191,18 @@ def test_parallel_propagation_matches_sequential():
 
     with ThreadPoolExecutor(2) as pool:
         assert run(pool) == run(None)
+
+
+def test_jittering_score_still_confirms_within_the_window():
+    """NanoTrack's box oscillates on a 3-frame rhythm (data/sessions/demo_detect,
+    f303-333), so the score crosses good_quality up and down. Confirmation counts
+    good frames in a window; consecutive ones would time out into LOST."""
+    one_good_in_three = lambda i: 0.9 if i % 3 == 0 else 0.45
+    manager, _, _ = _manager(one_good_in_three)
+    track_id = manager.select(BOX)
+
+    states = [next(s.state for s in manager.step(_frame(i)) if s.track_id == track_id)
+              for i in range(15)]
+
+    assert S.LOST not in states
+    assert S.TRACKING in states

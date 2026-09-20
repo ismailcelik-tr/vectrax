@@ -4,7 +4,7 @@ DEGRADED  = visible, quality below good.
 OCCLUDED  = not visible, within occlusion timeout.
 LOST      = not visible past the timeout. Leaves only by operator command.
 
-    INITIALIZING ──streak──► TRACKING ◄──► DEGRADED
+    INITIALIZING ──confirm──► TRACKING ◄──► DEGRADED
          │                     │  ▲          │
       timeout              bad │  │ good     │ bad
          ▼                     ▼  │          ▼
@@ -48,7 +48,7 @@ class Evidence:
     quality: float | None  # combined TrackQuality; None = no observation
     ns_since_visible: int
     ns_in_state: int
-    good_streak: int
+    good_recent: int  # good frames within the last confirm_window
 
 
 _S = TrackState
@@ -76,7 +76,7 @@ def next_state(state: TrackState, ev: Evidence, cfg: TrackingConfig) -> TrackSta
     good_q = cfg.good_quality - h if state is _S.TRACKING else cfg.good_quality
     visible = ev.quality is not None and ev.quality >= min_q
     if state is _S.INITIALIZING:
-        if ev.good_streak >= cfg.confirm_frames:
+        if ev.good_recent >= cfg.confirm_frames:
             return _S.TRACKING
 
         if ev.ns_in_state > cfg.init_timeout_ns:

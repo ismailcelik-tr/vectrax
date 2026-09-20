@@ -18,8 +18,9 @@ CFG = TrackingConfig(min_quality=0.3, good_quality=0.6, confirm_frames=3,
 GOOD, WEAK, BAD = 0.9, 0.4, 0.1
 
 
-def ev(quality, since_visible=0, in_state=0, streak=0):
-    return Evidence(quality=quality, ns_since_visible=since_visible, ns_in_state=in_state, good_streak=streak)
+def ev(quality, since_visible=0, in_state=0, good_recent=0):
+    return Evidence(quality=quality, ns_since_visible=since_visible, ns_in_state=in_state,
+                    good_recent=good_recent)
 
 
 S = TrackState
@@ -27,16 +28,16 @@ S = TrackState
 
 # Automatic transitions: one test per edge.
 
-def test_initializing_to_tracking_after_confirm_streak():
-    assert next_state(S.INITIALIZING, ev(GOOD, streak=3), CFG) is S.TRACKING
+def test_initializing_to_tracking_after_enough_good_frames():
+    assert next_state(S.INITIALIZING, ev(GOOD, good_recent=3), CFG) is S.TRACKING
 
 
-def test_initializing_waits_for_streak():
-    assert next_state(S.INITIALIZING, ev(GOOD, streak=2), CFG) is S.INITIALIZING
+def test_initializing_waits_for_enough_good_frames():
+    assert next_state(S.INITIALIZING, ev(GOOD, good_recent=2), CFG) is S.INITIALIZING
 
 
 def test_initializing_to_lost_on_timeout():
-    assert next_state(S.INITIALIZING, ev(WEAK, in_state=1_001, streak=0), CFG) is S.LOST
+    assert next_state(S.INITIALIZING, ev(WEAK, in_state=1_001, good_recent=0), CFG) is S.LOST
 
 
 def test_tracking_stays_on_good():
@@ -81,7 +82,7 @@ def test_occluded_to_degraded_on_weak():
 
 @pytest.mark.parametrize("state", [S.LOST, S.PAUSED, S.STOPPED])
 def test_operator_only_states_ignore_evidence(state):
-    assert next_state(state, ev(GOOD, streak=10), CFG) is state
+    assert next_state(state, ev(GOOD, good_recent=10), CFG) is state
 
 
 # Operator commands.

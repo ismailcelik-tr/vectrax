@@ -64,7 +64,7 @@ class _Track:
         self.observed: Box | None = None
         self.state_since = 0
         self.last_visible = 0
-        self.streak = 0
+        self.recent = None  # deque of the last quality verdicts
         self.frame_id = -1
         self.trail: deque[tuple[float, float]] = deque(maxlen=TRAIL_LEN)
 
@@ -162,7 +162,7 @@ class TrackManager:
         t.kf = CvKalman(box, frame.capture_ns, self._cfg)
         t.quality = TrackQuality(OPERATOR_SCORE, None)
         t.observed = box
-        t.streak = 1
+        t.recent = deque([True], maxlen=self._cfg.confirm_window)
         t.last_visible = frame.capture_ns
         t.frame_id = frame.frame_id
         t.trail.append((box.cx, box.cy))
@@ -182,12 +182,12 @@ class TrackManager:
         else:
             t.kf.coast()
 
-        t.streak = t.streak + 1 if q is not None and q >= self._cfg.good_quality else 0
+        t.recent.append(q is not None and q >= self._cfg.good_quality)
         t.observed = obs.box if obs else None
         t.frame_id = frame.frame_id
         t.trail.append((t.kf.box.cx, t.kf.box.cy))
 
-        ev = Evidence(q, ns - t.last_visible, ns - t.state_since, t.streak)
+        ev = Evidence(q, ns - t.last_visible, ns - t.state_since, sum(t.recent))
         self._transition(t, next_state(t.state, ev, self._cfg), frame)
 
     def _transition(self, t, new, frame):

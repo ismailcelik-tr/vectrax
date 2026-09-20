@@ -15,7 +15,12 @@ class TrackingConfig:
     good_quality: float = 0.6
     # Band around each threshold; stops TRACKING/DEGRADED/OCCLUDED flapping.
     quality_hysteresis: float = 0.1
+    # Leaving INITIALIZING needs confirm_frames good frames out of the last
+    # confirm_window. NanoTrack's box jitters on a 3-frame rhythm, so good
+    # frames arrive one in three; consecutive ones never confirm (ROADMAP).
+    # The window is well inside init_timeout_ns, so a wrong box still times out.
     confirm_frames: int = 3
+    confirm_window: int = 9
     init_timeout_ns: int = 1 * NS_PER_S
     occlusion_timeout_ns: int = 3 * NS_PER_S
 
@@ -38,6 +43,9 @@ class TrackingConfig:
 
         if self.confirm_frames < 1:
             raise ValueError("confirm_frames must be >= 1")
+
+        if not 0 < self.confirm_frames <= self.confirm_window:
+            raise ValueError("need 0 < confirm_frames <= confirm_window")
 
         if self.init_timeout_ns <= 0 or self.occlusion_timeout_ns <= 0 or self.coast_tau_ns <= 0:
             raise ValueError("timeouts must be > 0")

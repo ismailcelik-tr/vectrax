@@ -17,8 +17,13 @@ DET_BOX = Box(0.3, 0.4, 0.1, 0.1)
 class StubDetector:
     def __init__(self):
         self.seen = []
+        self.loaded = False
+
+    def load(self):
+        self.loaded = True
 
     def detect(self, frame):
+        assert self.loaded, "pipeline must load the detector before using it"
         self.seen.append(frame.frame_id)
         return [Observation(frame.frame_id, frame.capture_ns, DET_BOX, 0.8, Origin.DETECTOR, "cup")]
 

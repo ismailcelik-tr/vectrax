@@ -35,9 +35,16 @@ class FakeDetector:
     def __init__(self, gate: threading.Event | None = None):
         self.seen = []
         self.entered = threading.Event()
+        self.loaded = False
         self._gate = gate
 
+    def load(self):
+        self.loaded = True
+
     def detect(self, frame):
+        if not self.loaded:
+            raise RuntimeError("detector not loaded")
+
         self.entered.set()
         if self._gate is not None:
             self._gate.wait(JOIN_S)
@@ -72,9 +79,21 @@ def test_submit_drops_frames_instead_of_queueing_them():
     assert worker.dropped == 49
 
 
+def test_worker_loads_the_detector_before_the_first_frame():
+    detector = FakeDetector()
+    worker = InferenceWorker(detector, RunMode.DETERMINISTIC, clock=VirtualClock(), stride=1)
+
+    worker.start()
+    worker.submit(_frame(0))
+
+    assert detector.loaded
+    assert worker.processed == 1
+
+
 def test_stride_skips_frames_before_the_detector():
     detector = FakeDetector()
     worker = InferenceWorker(detector, RunMode.DETERMINISTIC, clock=VirtualClock(), stride=3)
+    worker.start()
 
     for i in range(7):
         worker.submit(_frame(i))
@@ -85,6 +104,7 @@ def test_stride_skips_frames_before_the_detector():
 def test_results_carry_the_frame_they_saw_and_drain_once():
     detector = FakeDetector()
     worker = InferenceWorker(detector, RunMode.DETERMINISTIC, clock=VirtualClock(), stride=1)
+    worker.start()
 
     worker.submit(_frame(4))
     results = worker.results()
@@ -98,6 +118,9 @@ def test_results_carry_the_frame_they_saw_and_drain_once():
 class Boom:
     def __init__(self):
         self.calls = 0
+
+    def load(self):
+        pass
 
     def detect(self, frame):
         self.calls += 1
@@ -120,6 +143,7 @@ def test_a_failing_detection_never_stops_the_worker():
 
 def test_deterministic_mode_raises_instead_of_hiding_the_failure():
     worker = InferenceWorker(Boom(), RunMode.DETERMINISTIC, clock=VirtualClock(), stride=1)
+    worker.start()
 
     with pytest.raises(RuntimeError):
         worker.submit(_frame(0))

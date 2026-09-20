@@ -28,8 +28,11 @@ class InferenceWorker:
     a slow model drops frames, it never queues them or delays the tick.
     DETERMINISTIC runs it inline on `submit`, so a replay reproduces exactly.
 
-    A failed detection is counted and skipped in REALTIME; DETERMINISTIC lets it
-    raise, because a replay that silently skips inference is not a replay.
+    The detector must provide `load()` and `detect(frame)`. `start()` loads it
+    eagerly and lets a bad model fail there, where the caller sees it: per-frame
+    failures are counted and skipped in REALTIME, so a model that never works
+    would otherwise stay silent. DETERMINISTIC lets a failure raise, because a
+    replay that silently skips inference is not a replay.
     """
 
     def __init__(self, detector, mode: RunMode, stride: int = STRIDE, clock: Clock | None = None):
@@ -63,7 +66,11 @@ class InferenceWorker:
             return self._failures
 
     def start(self) -> None:
-        if self._mode is RunMode.DETERMINISTIC or self._thread is not None:
+        if self._thread is not None:
+            return
+
+        self._detector.load()
+        if self._mode is RunMode.DETERMINISTIC:
             return
 
         self._thread = threading.Thread(target=self._run, name="inference", daemon=True)

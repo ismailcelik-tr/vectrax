@@ -8,6 +8,7 @@ Every install made for VectraX outside the repo is recorded here, so
 |---|---|---|
 | Python deps | `.venv/` | `uv sync` (all groups by default) |
 | Brew snapshot, CVAT checkout | `tools/` (git-ignored) | — |
+| Detector library caches | `tools/ultralytics`, `tools/hf`, `tools/roboflow` | set by `benchmarks/detectors.py` |
 | Recordings, model weights | `data/`, `models/` (git-ignored) | — |
 
 Dependency groups: default (runtime), `dev` (pytest, ruff), `ml` (torch,
@@ -49,6 +50,17 @@ Python 3.13 (Homebrew) was already installed; it is not removed.
   clip, export ~3 s. Uses ~5 GB RAM: stop with
   `docker compose -f tools/cvat/docker-compose.yml stop` when not annotating.
 - Tasks and export: `scripts/cvat_tasks.py`.
+
+## Detector benchmark notes
+- `benchmarks/detectors.py` pins `YOLO_CONFIG_DIR`, `HF_HOME` and `RF_HOME`
+  under `tools/` and creates the directories; ultralytics falls back to
+  `/tmp/Ultralytics` if its directory is missing. Verified: only
+  `tools/ultralytics/Ultralytics/settings.json` is written, nothing in the
+  home directory.
+- RF-DETR Nano downloads no DINOv2 weights: patch size 16 and its positional
+  encoding size disable `load_dinov2_weights`. It re-checks the local
+  checkpoint's MD5 on every load. Verified with `HF_HUB_OFFLINE=1`.
+- D-FINE and the YOLOs load from `models/detectors/` only; no downloads.
 
 ## Known issues
 - coremltools 9.0 is tested up to torch 2.7; installed torch is 2.14.

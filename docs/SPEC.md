@@ -22,9 +22,13 @@ chooses targets. v1 never actuates hardware; guidance is displayed only.
   Record only the owner and consenting people.
 
 ## Non-goals (v1)
-Physical camera control. Weapon/engagement logic. Microservices, brokers,
-databases in the real-time path. Browser-side perception. Anomaly detection
-and dedicated classifiers until a use case with acceptance criteria exists.
+Physical camera control. Weapon/engagement logic: out of scope for v1 and
+deliberately left open beyond it — the owner may widen it, and that takes its
+own ADR covering authorization, accountability and a safety review, not a
+line edit here. Perception (detect, track, warn) carries no such condition.
+Microservices, brokers, databases in the real-time path. Browser-side
+perception. Anomaly detection and dedicated classifiers until a use case with
+acceptance criteria exists.
 
 ## Pipeline
 CameraSource → FramePacket → LatestFrameBuffer (bounded, drop-oldest)

@@ -9,7 +9,7 @@ Phases: docs/SPEC.md. This file tracks the current phase and open items.
 - [x] Fixture non_coco: transparent food container (R1 test)
 - [x] Evening (dark room): glass-to-glass MacBook + iPhone wired → ADR-002 closed
 - [x] Evening: low_light fixture (SAM 2 pre-label, owner reviewed)
-- [ ] CVAT up, annotate fixtures, export MOT 1.1
+- [x] CVAT up, annotate fixtures, export MOT 1.1 (done after Phase 1, below)
 
 ## Phase 1 — walking skeleton (approved 2026-09-19, closed 2026-09-19)
 Steps, one commit each, test first:
@@ -97,3 +97,31 @@ Out of scope: open-vocabulary detectors (AGPL or too heavy); R1
 reacquisition goes through appearance (Phase 4). SAM 2 is not a runtime
 candidate (~1.1 s/frame on MPS), so SAM 2 pre-labels do not bias results;
 SAM-family candidates would be scored on owner-labelled fixtures only.
+
+## Phase 3 — detector in the loop (approved 2026-09-20)
+
+Owner's calls: detection every N frames, invisible to the eye (start N=2,
+15 Hz); Core ML fp16 on the GPU (ADR-009 default, power is not the priority
+now); the detector supplies evidence, it does not set state.
+
+Steps, one commit each, test first:
+- [ ] 1. `src/vectrax/detection/`: Core ML fp16 detector, warm-up on load
+      (first compile ~5.7 s), returns `Observation` with a class hint.
+      Decode moves out of benchmarks/ so both callers share it.
+- [ ] 2. InferenceWorker: own thread, capacity-1 input (drop-oldest),
+      stride N. A slow detector must not slow the tick or build a queue.
+- [ ] 3. Late-result fusion: results carry the frame they saw; the
+      correction is matched there and carried forward to the current frame.
+- [ ] 4. Associator: mutual-best IoU, class hint as weight only (R1).
+      Two nearby targets must not swap (the 2b hijack case).
+- [ ] 5. Quality fusion, asymmetric: a detection overlapping the track may
+      lift DEGRADED/OCCLUDED to TRACKING; no detection never demotes a
+      track — a COCO detector cannot see arbitrary targets (the paper in
+      data/sessions/demo_20260920 was never detected). TrackManager keeps
+      sole authority over transitions. Regression: the phone in that
+      session must not read OCCLUDED while it is visible.
+- [ ] 6. 1–3 targets: R3a/R3b measured with detection on → PERFORMANCE.md,
+      ADR-010 (detection scheduling and fusion).
+
+Acceptance: tests green, ruff clean; deterministic replay reproduces runs;
+R3a p95 ≤ 100 ms with detection on; owner verifies on camera.

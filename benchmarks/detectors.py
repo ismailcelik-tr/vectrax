@@ -1,7 +1,8 @@
 """Detector adapters for Phase 2c: a BGR frame in, `Detection` list out.
 
-Benchmarks only — the runtime detector arrives in Phase 3, after ADR-009.
-`load()` is separate from `detect()` so both can be timed on their own.
+Benchmarks only: the runtime detector lives in `vectrax.detection` and these
+adapters share its preprocessing and decode. `load()` is separate from
+`detect()` so both can be timed on their own.
 
 Third-party caches are pinned under `tools/` so inference writes nothing to
 the home directory (docs/SETUP.md).
@@ -14,9 +15,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-import cv2
 import numpy as np
 
+from vectrax.detection.coreml import IMAGENET_MEAN, IMAGENET_STD, INPUT_SIZE
+from vectrax.detection.decode import preprocess, to_observations
 from vectrax.evaluation.detection import Detection
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,12 +36,6 @@ CPU = "cpu"
 # and AP50 needs the low-score tail.
 SCORE_MIN = 0.05
 YOLO_IMGSZ = 640
-IMAGENET_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_STD = (0.229, 0.224, 0.225)
-# Query/class pairs both DETR heads keep: rfdetr PostProcess.num_select and
-# transformers RTDetr num_top_queries.
-TOP_K = 300
-SIGMOID_CLIP = 88.0  # exp overflow guard in float32
 BOX_DIMS = 4
 
 for var, path in CACHES.items():
@@ -47,7 +43,7 @@ for var, path in CACHES.items():
     path.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault(var, str(path))
 
-__all__ = ["BACKENDS", "DETECTORS", "Detector", "build", "decode", "to_detections"]
+__all__ = ["BACKENDS", "DETECTORS", "Detector", "build", "to_detections"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +56,7 @@ class Spec:
 
 
 SPECS = {
-    "rfdetr_n": Spec(384, IMAGENET_MEAN, IMAGENET_STD),
+    "rfdetr_n": Spec(INPUT_SIZE, IMAGENET_MEAN, IMAGENET_STD),
     "dfine_n": Spec(640, None, None),
 }
 
@@ -86,48 +82,16 @@ def to_detections(xyxy: Sequence[Sequence[float]], scores: Sequence[float], labe
     return dets
 
 
-def decode(boxes: np.ndarray, logits: np.ndarray, labels: dict[int, str],
-           size: tuple[int, int], frame: int, score_min: float, top_k: int = TOP_K) -> list[Detection]:
-    """DETR decode: per-class sigmoid, top-k query/class pairs, cxcywh → pixel Detections.
-
-    Mirrors rfdetr `PostProcess` and transformers `post_process_object_detection`: one
-    query may yield several classes. Class indices missing from `labels` are dropped
-    (RF-DETR's background slot). Boxes are clamped to the frame, as RF-DETR does.
-    """
-    scores = 1.0 / (1.0 + np.exp(-np.clip(logits, -SIGMOID_CLIP, SIGMOID_CLIP)))
-    flat = scores.ravel()
-    classes = scores.shape[1]
-    keep = min(top_k, flat.size)
-    order = np.argpartition(-flat, keep - 1)[:keep]
-
+def _as_detections(observations, size):
+    """Observations carry normalized boxes; scoring wants pixels, unrounded."""
     width, height = size
     dets = []
-    for i in order:
-        score = float(flat[i])
-        label = labels.get(int(i) % classes)
-        if score < score_min or label is None:
-            continue
-
-        cx, cy, w, h = boxes[int(i) // classes]
-        x1 = min(max((cx - w / 2) * width, 0.0), width)
-        y1 = min(max((cy - h / 2) * height, 0.0), height)
-        x2 = min(max((cx + w / 2) * width, 0.0), width)
-        y2 = min(max((cy + h / 2) * height, 0.0), height)
-        dets.append(Detection(frame, (x1, y1, x2 - x1, y2 - y1), score, label))
+    for o in observations:
+        w, h = o.box.w * width, o.box.h * height
+        dets.append(Detection(o.frame_id, (o.box.cx * width - w / 2, o.box.cy * height - h / 2, w, h),
+                              o.score, o.label))
 
     return dets
-
-
-def _preprocess(frame: np.ndarray, spec: Spec) -> np.ndarray:
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    resized = cv2.resize(rgb, (spec.size, spec.size), interpolation=cv2.INTER_LINEAR)
-    chw = resized.transpose(2, 0, 1).astype(np.float32) / 255.0
-    if spec.mean is not None:
-        mean = np.array(spec.mean, dtype=np.float32)[:, None, None]
-        std = np.array(spec.std, dtype=np.float32)[:, None, None]
-        chw = (chw - mean) / std
-
-    return chw[None]
 
 
 def _split_outputs(outputs):
@@ -230,7 +194,14 @@ class DFineDetector:
                              frame_id, self._score_min)
 
 
-class OnnxDetector:
+class ExportedDetector:
+    """Shared preprocessing for the exported graphs."""
+
+    def _batch(self, frame: np.ndarray) -> np.ndarray:
+        return preprocess(frame, self._spec.size, self._spec.mean, self._spec.std)
+
+
+class OnnxDetector(ExportedDetector):
     """An exported ONNX graph on one ONNX Runtime provider."""
 
     def __init__(self, name: str, providers: list[str], score_min: float = SCORE_MIN):
@@ -252,13 +223,15 @@ class OnnxDetector:
         self._input = self._session.get_inputs()[0].name
 
     def detect(self, frame: np.ndarray, frame_id: int) -> list[Detection]:
-        outputs = self._session.run(None, {self._input: _preprocess(frame, self._spec)})
+        outputs = self._session.run(None, {self._input: self._batch(frame)})
         boxes, logits = _split_outputs(outputs)
-        return decode(boxes, logits, self._labels, (frame.shape[1], frame.shape[0]),
-                      frame_id, self._score_min)
+        size = (frame.shape[1], frame.shape[0])
+        observations = to_observations(boxes, logits, self._labels, size, frame_id,
+                                       capture_ns=0, score_min=self._score_min)
+        return _as_detections(observations, size)
 
 
-class CoreMlDetector:
+class CoreMlDetector(ExportedDetector):
     """A Core ML package pinned to one set of compute units."""
 
     def __init__(self, name: str, compute_units: str, precision: str = COREML_PRECISION,
@@ -279,10 +252,12 @@ class CoreMlDetector:
         self._input = self._model.get_spec().description.input[0].name
 
     def detect(self, frame: np.ndarray, frame_id: int) -> list[Detection]:
-        outputs = self._model.predict({self._input: _preprocess(frame, self._spec)})
+        outputs = self._model.predict({self._input: self._batch(frame)})
         boxes, logits = _split_outputs(list(outputs.values()))
-        return decode(boxes, logits, self._labels, (frame.shape[1], frame.shape[0]),
-                      frame_id, self._score_min)
+        size = (frame.shape[1], frame.shape[0])
+        observations = to_observations(boxes, logits, self._labels, size, frame_id,
+                                       capture_ns=0, score_min=self._score_min)
+        return _as_detections(observations, size)
 
 
 DETECTORS = {

@@ -11,6 +11,7 @@ __all__ = ["Observation", "Origin"]
 class Origin(Enum):
     OPERATOR = "operator"
     PROPAGATOR = "propagator"
+    DETECTOR = "detector"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,3 +21,4 @@ class Observation:
     box: Box
     score: float  # 0..1
     origin: Origin
+    label: str | None = None  # detector class, a hint only (R1)

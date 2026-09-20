@@ -105,7 +105,7 @@ Owner's calls: detection every N frames, invisible to the eye (start N=2,
 now); the detector supplies evidence, it does not set state.
 
 Steps, one commit each, test first:
-- [ ] 1. `src/vectrax/detection/`: Core ML fp16 detector, warm-up on load
+- [x] 1. `src/vectrax/detection/`: Core ML fp16 detector, warm-up on load
       (first compile ~5.7 s), returns `Observation` with a class hint.
       Decode moves out of benchmarks/ so both callers share it.
 - [ ] 2. InferenceWorker: own thread, capacity-1 input (drop-oldest),

@@ -136,3 +136,28 @@ Reading:
 - non_coco: D-FINE reaches 63 % recall, RF-DETR 39 %. The transparent
   container is detected as some COCO class; R1 cannot rely on the label.
 - The YOLOs are AGPL reference only (R5) and are also the weakest here.
+
+## Backend parity, RF-DETR-N and D-FINE-N (2c, 2026-09-20)
+
+The exported graphs are decoded by our own code (`benchmarks/detectors.py`
+`decode`), so each backend was scored on two fixtures against the PyTorch
+adapter. Command: `uv run benchmarks/detection_eval.py --detector <d>
+--backend <b> [--precision fp16]`. Raw: `benchmarks/results/detection/`.
+
+| Detector, backend | single_target rec / AP50 | occlusion rec / AP50 / prec |
+|---|---|---|
+| RF-DETR-N pytorch-cpu | 96 / 100 | 71 / 81 / 95 |
+| RF-DETR-N onnx-cpu | 96 / 100 | 71 / 81 / 94 |
+| RF-DETR-N coreml-gpu fp16 | 96 / 100 | 71 / 81 / 94 |
+| RF-DETR-N coreml-ane fp16 | 96 / 100 | 69 / 77 / 91 |
+| D-FINE-N pytorch-cpu | 14 / 44 | 17 / 51 / 88 |
+| D-FINE-N onnx-cpu | 15 / 46 | 18 / 52 / 88 |
+
+- ONNX and Core ML GPU match PyTorch on RF-DETR to within one box.
+- The Core ML ANE path drifts: 10 fewer true positives and 10 more false
+  positives on occlusion (fp16 plus ANE arithmetic). Small, but it is the one
+  backend whose numbers are not interchangeable with the others.
+- D-FINE-N ONNX scores a little higher than its PyTorch adapter because the
+  resize filter differs: the HF processor uses antialiased PIL bilinear, our
+  adapter `cv2.INTER_LINEAR`. RF-DETR has no such gap — its own `predict()`
+  resizes with `antialias=False`, which is what cv2 does.

@@ -1,0 +1,34 @@
+{
+  "detector": "dfine_n",
+  "backend": "onnx-cpu",
+  "score_min": 0.5,
+  "git_sha": "f87b9e1",
+  "git_dirty": true,
+  "macos": "27.0",
+  "fixtures": [
+    {
+      "fixture": "single_target",
+      "label": "cup",
+      "frames": 600,
+      "detections": 104118,
+      "gt_count": 600,
+      "tp": 90,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.15,
+      "ap50": 0.46405790268098285
+    },
+    {
+      "fixture": "occlusion",
+      "label": "cup",
+      "frames": 751,
+      "detections": 131364,
+      "gt_count": 371,
+      "tp": 68,
+      "fp": 9,
+      "precision": 0.8831168831168831,
+      "recall": 0.18328840970350405,
+      "ap50": 0.5160097549171346
+    }
+  ]
+}

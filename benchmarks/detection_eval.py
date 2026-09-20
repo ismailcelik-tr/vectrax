@@ -18,7 +18,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from detectors import DETECTORS
+from detectors import BACKENDS, DETECTORS, build
 
 from vectrax.evaluation.detection import evaluate_detections
 from vectrax.evaluation.gt import load_mot
@@ -66,11 +66,14 @@ def _run(detector, name, score_min):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--detector", choices=sorted(DETECTORS), required=True)
+    p.add_argument("--backend", choices=BACKENDS, default="pytorch-cpu")
+    p.add_argument("--precision", choices=["fp32", "fp16"], default="fp16",
+                   help="Core ML bundle precision")
     p.add_argument("--fixtures", default=",".join(NAMES))
     p.add_argument("--score-min", type=float, default=SCORE_MIN)
     args = p.parse_args()
 
-    detector = DETECTORS[args.detector]()
+    detector = build(args.detector, args.backend, args.precision)
     detector.load()
 
     rows = []
@@ -84,11 +87,12 @@ def main():
               f"{100 * r['precision']:4.0f}% {100 * r['recall']:4.0f}% {100 * r['ap50']:4.0f}%")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    report = {"detector": args.detector, "backend": "pytorch-cpu", "score_min": args.score_min,
+    report = {"detector": args.detector, "backend": args.backend, "precision": args.precision,
+              "score_min": args.score_min,
               "git_sha": _git("rev-parse", "--short", "HEAD"),
               "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
               "macos": platform.mac_ver()[0], "fixtures": rows}
-    out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{args.detector}.json"
+    out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{args.detector}_{args.backend}.json"
     out.write_text(json.dumps(report, indent=2))
     print(f"\nSaved {out}")
 

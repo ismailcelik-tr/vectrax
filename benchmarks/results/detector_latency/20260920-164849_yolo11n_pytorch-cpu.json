@@ -1,0 +1,41 @@
+{
+  "detector": "yolo11n",
+  "backend": "pytorch-cpu",
+  "fixture": "single_target",
+  "load_ms": 483.6,
+  "first_inference_ms": 450.9,
+  "first_inference_detections": 7,
+  "inference_ms": {
+    "n": 300,
+    "p50": 15.91,
+    "p95": 20.2,
+    "max": 24.18
+  },
+  "elapsed_s": 5.0,
+  "rss_peak_mb": 729.5,
+  "per_minute": null,
+  "power": {
+    "samples": 4,
+    "cpu_usage_pct_mean": 0.385,
+    "cpu_usage_pct_max": 0.431,
+    "ecpu_active_ratio_mean": 0.166,
+    "ecpu_active_ratio_max": 0.194,
+    "pcpu_active_ratio_mean": 0.715,
+    "pcpu_active_ratio_max": 0.786,
+    "gpu_active_ratio_mean": 0.276,
+    "gpu_active_ratio_max": 0.333,
+    "ane_power_mean": 0.0,
+    "ane_power_max": 0.0,
+    "gpu_power_mean": 0.682,
+    "gpu_power_max": 0.871,
+    "sys_power_mean": 33.716,
+    "sys_power_max": 38.251,
+    "cpu_temp_c_first": 64.8,
+    "cpu_temp_c_last": 68.9
+  },
+  "pmset_ps": "Now drawing from 'AC Power'",
+  "lowpowermode": "0",
+  "git_sha": "f87b9e1",
+  "git_dirty": false,
+  "macos": "27.0"
+}

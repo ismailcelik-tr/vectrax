@@ -1,0 +1,34 @@
+{
+  "detector": "rfdetr_n",
+  "backend": "onnx-cpu",
+  "score_min": 0.5,
+  "git_sha": "f87b9e1",
+  "git_dirty": true,
+  "macos": "27.0",
+  "fixtures": [
+    {
+      "fixture": "single_target",
+      "label": "cup",
+      "frames": 600,
+      "detections": 27241,
+      "gt_count": 600,
+      "tp": 578,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.9633333333333334,
+      "ap50": 0.9997482323232323
+    },
+    {
+      "fixture": "occlusion",
+      "label": "cup",
+      "frames": 751,
+      "detections": 44750,
+      "gt_count": 371,
+      "tp": 265,
+      "fp": 16,
+      "precision": 0.9430604982206405,
+      "recall": 0.7142857142857143,
+      "ap50": 0.8096388465536964
+    }
+  ]
+}

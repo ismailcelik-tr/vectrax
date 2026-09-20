@@ -10,6 +10,7 @@ Every install made for VectraX outside the repo is recorded here, so
 | Brew snapshot, CVAT checkout | `tools/` (git-ignored) | — |
 | Detector library caches | `tools/ultralytics`, `tools/hf`, `tools/roboflow` | set by `benchmarks/detectors.py` |
 | Recordings, model weights | `data/`, `models/` (git-ignored) | — |
+| Exported detector graphs | `models/detectors/exported/` | `uv run benchmarks/export_detectors.py` |
 
 Dependency groups: default (runtime), `dev` (pytest, ruff), `ml` (torch,
 onnx, onnxruntime, coremltools, rfdetr, transformers — benchmarks only),
@@ -61,8 +62,26 @@ Python 3.13 (Homebrew) was already installed; it is not removed.
   encoding size disable `load_dinov2_weights`. It re-checks the local
   checkpoint's MD5 on every load. Verified with `HF_HUB_OFFLINE=1`.
 - D-FINE and the YOLOs load from `models/detectors/` only; no downloads.
+- Exports (`benchmarks/export_detectors.py`, artifacts git-ignored):
+  `rfdetr_n --format onnx` → `rfdetr-nano.onnx` (108 MB, input 1x3x384x384,
+  outputs `dets` 1x300x4 and `labels` 1x300x91); `--format coreml
+  --precision fp16|fp32` → `rfdetr-nano_fp16/_fp32.mlpackage`;
+  `dfine_n --format onnx` → `dfine_n.onnx` (input 1x3x640x640, outputs
+  `logits` and `pred_boxes`). Each directory also gets a `labels.json` (class
+  index → COCO name) so inference needs no model stack.
+- `torch.onnx.export` needs `dynamo=False`: torch 2.14's default exporter
+  imports `onnxscript`, which is not installed. The YOLOs are not exported
+  (AGPL, reference only).
 
 ## Known issues
-- coremltools 9.0 is tested up to torch 2.7; installed torch is 2.14.
-  PROVISIONAL — resolve in Phase 2 (pin torch or convert via ONNX).
+- coremltools 9.0 is tested up to torch 2.7; installed torch is 2.14. It
+  converts RF-DETR (warning only) but fails on D-FINE, so D-FINE has no Core ML
+  numbers — PROVISIONAL. TorchScript frontend: `TypeError: only 0-dimensional
+  arrays can be converted to Python scalars` (ops.py `_cast`). torch.export
+  frontend after `run_decompositions({})`: `NotImplementedError: Unsupported fx
+  node _is_all_true`. A fix means pinning torch < 2.12 in a separate
+  environment; not done, since D-FINE lost on accuracy anyway.
+- ONNX Runtime's CoreML EP fails on the D-FINE graph:
+  `CoreML static output shape ({1,1,1,300,300}) and inferred shape ({1,300})
+  have different ranks`. ORT CPU works.
 - TrackEval's BURST module needs pycocotools; not used.

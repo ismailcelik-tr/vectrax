@@ -96,3 +96,76 @@ not cover the full screen; contrast was sufficient (0 missed toggles).
 | iPhone wired (rear camera) | 102.3 / 101.8 / 116.1 | 51.7 / 51.7 / 65.3 |
 
 Frame quantization (33 ms) spreads single samples; compare means.
+
+## Detector backends, 1280x720 frames (2026-09-20, AC power, Low Power Mode off)
+
+Command: `uv run benchmarks/detector_latency.py --detector <d> --backend <b>
+[--precision fp16|fp32]`. Raw: `benchmarks/results/detector_latency/`,
+git `f87b9e1`. 300 inferences after 10 warm-up, cycling 120 decoded
+single_target frames; decoding is outside the timed loop. Load and the first
+inference are timed separately, since the first call pays lazy build or graph
+compile. RSS is the process peak, so it includes the framework (torch ~0.5 GB).
+The `git_dirty: true` flag in every file comes from the benchmark scripts these
+runs used, committed immediately afterwards; no code changed between runs.
+
+| Detector | Backend | load ms | first ms | p50 ms | p95 ms | RSS MB |
+|---|---|---|---|---|---|---|
+| YOLO26n (ref) | pytorch-cpu | 606 | 533 | 15.8 | 20.4 | 740 |
+| YOLO26n (ref) | pytorch-mps | 598 | 2286 | 8.3 | 12.5 | 887 |
+| YOLO11n (ref) | pytorch-cpu | 484 | 451 | 15.9 | 20.2 | 730 |
+| YOLO11n (ref) | pytorch-mps | 581 | 885 | 7.9 | 11.4 | 885 |
+| RF-DETR-N | pytorch-cpu | 4061 | 119 | 42.4 | 51.4 | 1223 |
+| RF-DETR-N | pytorch-mps | 3585 | 1571 | 27.6 | 33.6 | 1278 |
+| RF-DETR-N | onnx-cpu | 89 | 48 | 46.6 | 59.7 | 630 |
+| RF-DETR-N | onnx-coreml | 4035 | 95 | 67.0 | 76.3 | 1079 |
+| RF-DETR-N | coreml-cpu fp32 | 1642 | 61 | 31.6 | 34.1 | 968 |
+| RF-DETR-N | coreml-gpu fp32 | 1611 | 173 | 16.0 | 18.0 | 976 |
+| RF-DETR-N | coreml-ane fp32 | 1727 | 41 | 31.5 | 33.8 | 971 |
+| RF-DETR-N | coreml-cpu fp16 | 1570 | 39 | 17.3 | 18.5 | 865 |
+| **RF-DETR-N** | **coreml-gpu fp16** | 1579 | 5694 | **8.3** | **9.7** | 873 |
+| RF-DETR-N | coreml-ane fp16 | 4157 | 15 | 10.8 | 12.9 | 817 |
+| D-FINE-N | pytorch-cpu | 1771 | 88 | 61.5 | 77.3 | 908 |
+| D-FINE-N | pytorch-mps | 1852 | 2611 | 24.0 | 30.4 | 985 |
+| D-FINE-N | onnx-cpu | 124 | 31 | 25.4 | 32.6 | 567 |
+| D-FINE-N | onnx-coreml | — | — | — | — | — |
+
+Reading:
+- Core ML fp16 is the fastest path for RF-DETR-N: 8.3 ms p50 on the GPU, 10.8 ms
+  on the ANE — 3–5× PyTorch CPU (42.4 ms) and 3× faster than MPS (27.6 ms).
+  fp32 Core ML halves that advantage (16.0 ms GPU) and gives the ANE nothing
+  (31.5 ms, same as CPU_ONLY): the ANE needs fp16.
+- ONNX Runtime is the slowest option for RF-DETR (46.6 ms CPU) and its CoreML EP
+  makes it worse (67.0 ms) — the graph is partitioned, not handed over whole. It
+  does have the cheapest load (89 ms) and smallest RSS (630 MB).
+- D-FINE-N's ONNX CPU path (25.4 ms) beats its PyTorch CPU path (61.5 ms) by
+  2.4×; it has no Core ML numbers (conversion fails, docs/SETUP.md) and ORT's
+  CoreML EP rejects its graph.
+- First-inference cost is where compile lands, and it moves: the same
+  coreml-gpu fp16 bundle showed 5694 ms cold and 142 ms once macOS had cached
+  the compiled model. Treat it as "up to ~6 s once per bundle", not per process.
+- Load is ~4 s for anything that goes through the rfdetr package (checkpoint
+  read plus MD5 check) and ~0.1 s for a bare ONNX session.
+- Power figures in these files rest on 2–20 macmon samples (runs last 2.5–20 s);
+  only the sustained runs below are worth quoting.
+
+### 5-minute sustained, RF-DETR-N Core ML fp16 (same conditions)
+
+Command: as above with `--sustained-s 300`. Raw:
+`20260920-171746_rfdetr_n_coreml-gpu.json`,
+`20260920-172252_rfdetr_n_coreml-ane.json` (298 macmon samples each).
+
+| Backend | inferences | p50 / p95 ms | per-minute p50 | sys W | ANE W | GPU act. | CPU % | temp °C |
+|---|---|---|---|---|---|---|---|---|
+| coreml-gpu fp16 | 34471 | 8.4 / 10.1 | 8.31, 8.41, 8.49, 8.36, 8.35 | 42.2 | 0.18 | 0.81 | 16 | 66 → 77 |
+| coreml-ane fp16 | 27528 | 10.8 / 11.5 | 10.81, 10.82, 10.81, 10.81, 10.80 | 31.1 | 1.41 | 0.27 | 13 | 73 → 60 |
+
+- Neither path drifts over five minutes: GPU p50 stays within 0.2 ms, ANE within
+  0.02 ms. No thermal throttling at 30 fps-equivalent load.
+- The ANE run draws 11 W less at the package and cools the machine down
+  (73 → 60 °C) while the GPU run heats it (66 → 77 °C). ANE power only registers
+  in macmon on the ANE run (1.41 W vs 0.18 W), which is also how we know the ANE
+  is actually being used — the fp32 bundle reported 0.0 W and CPU-level latency.
+- These two runs back to back ran hotter than the short runs (the GPU run
+  started at 66 °C); the absolute package watts include whatever else the
+  machine was doing, so compare the two rows with each other, not with vendor
+  figures.

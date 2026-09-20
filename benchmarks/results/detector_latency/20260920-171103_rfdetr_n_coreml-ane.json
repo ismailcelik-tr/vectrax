@@ -1,0 +1,42 @@
+{
+  "detector": "rfdetr_n",
+  "backend": "coreml-ane",
+  "precision": "fp32",
+  "fixture": "single_target",
+  "load_ms": 1726.6,
+  "first_inference_ms": 40.6,
+  "first_inference_detections": 54,
+  "inference_ms": {
+    "n": 300,
+    "p50": 31.48,
+    "p95": 33.83,
+    "max": 41.89
+  },
+  "elapsed_s": 9.5,
+  "rss_peak_mb": 971.0,
+  "per_minute": null,
+  "power": {
+    "samples": 9,
+    "cpu_usage_pct_mean": 0.254,
+    "cpu_usage_pct_max": 0.293,
+    "ecpu_active_ratio_mean": 0.145,
+    "ecpu_active_ratio_max": 0.166,
+    "pcpu_active_ratio_mean": 0.442,
+    "pcpu_active_ratio_max": 0.514,
+    "gpu_active_ratio_mean": 0.246,
+    "gpu_active_ratio_max": 0.263,
+    "ane_power_mean": 0.0,
+    "ane_power_max": 0.0,
+    "gpu_power_mean": 0.443,
+    "gpu_power_max": 0.488,
+    "sys_power_mean": 30.027,
+    "sys_power_max": 33.051,
+    "cpu_temp_c_first": 65.5,
+    "cpu_temp_c_last": 70.9
+  },
+  "pmset_ps": "Now drawing from 'AC Power'",
+  "lowpowermode": "0",
+  "git_sha": "f87b9e1",
+  "git_dirty": true,
+  "macos": "27.0"
+}

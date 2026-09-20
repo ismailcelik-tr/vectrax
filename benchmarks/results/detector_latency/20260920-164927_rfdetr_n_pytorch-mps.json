@@ -1,0 +1,41 @@
+{
+  "detector": "rfdetr_n",
+  "backend": "pytorch-mps",
+  "fixture": "single_target",
+  "load_ms": 3584.9,
+  "first_inference_ms": 1571.3,
+  "first_inference_detections": 55,
+  "inference_ms": {
+    "n": 300,
+    "p50": 27.61,
+    "p95": 33.62,
+    "max": 40.42
+  },
+  "elapsed_s": 8.6,
+  "rss_peak_mb": 1277.7,
+  "per_minute": null,
+  "power": {
+    "samples": 8,
+    "cpu_usage_pct_mean": 0.117,
+    "cpu_usage_pct_max": 0.193,
+    "ecpu_active_ratio_mean": 0.104,
+    "ecpu_active_ratio_max": 0.123,
+    "pcpu_active_ratio_mean": 0.213,
+    "pcpu_active_ratio_max": 0.376,
+    "gpu_active_ratio_mean": 0.953,
+    "gpu_active_ratio_max": 0.964,
+    "ane_power_mean": 0.0,
+    "ane_power_max": 0.0,
+    "gpu_power_mean": 11.835,
+    "gpu_power_max": 12.045,
+    "sys_power_mean": 31.183,
+    "sys_power_max": 36.808,
+    "cpu_temp_c_first": 67.4,
+    "cpu_temp_c_last": 69.5
+  },
+  "pmset_ps": "Now drawing from 'AC Power'",
+  "lowpowermode": "0",
+  "git_sha": "f87b9e1",
+  "git_dirty": false,
+  "macos": "27.0"
+}

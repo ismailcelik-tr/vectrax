@@ -7,11 +7,14 @@ Third-party caches are pinned under `tools/` so inference writes nothing to
 the home directory (docs/SETUP.md).
 """
 
+import json
 import os
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import cv2
 import numpy as np
 
 from vectrax.evaluation.detection import Detection
@@ -23,18 +26,43 @@ CACHES = {
     "HF_HOME": ROOT / "tools" / "hf",
     "RF_HOME": ROOT / "tools" / "roboflow",
 }
+EXPORTED = MODELS / "exported"
+LABELS_FILE = "labels.json"
+COREML_PRECISION = "fp16"  # what a deployment would ship; ANE requires it
 CPU = "cpu"
 # Emit almost everything: precision/recall thresholds are applied when scoring,
 # and AP50 needs the low-score tail.
 SCORE_MIN = 0.05
 YOLO_IMGSZ = 640
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+# Query/class pairs both DETR heads keep: rfdetr PostProcess.num_select and
+# transformers RTDetr num_top_queries.
+TOP_K = 300
+SIGMOID_CLIP = 88.0  # exp overflow guard in float32
+BOX_DIMS = 4
 
 for var, path in CACHES.items():
     # Ultralytics silently falls back to /tmp when the directory does not exist.
     path.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault(var, str(path))
 
-__all__ = ["DETECTORS", "DFineDetector", "Detector", "RfDetrDetector", "YoloDetector", "to_detections"]
+__all__ = ["BACKENDS", "DETECTORS", "Detector", "build", "decode", "to_detections"]
+
+
+@dataclass(frozen=True, slots=True)
+class Spec:
+    """What an exported graph needs around it; the graph itself stops at the model outputs."""
+
+    size: int  # square input, pixels
+    mean: tuple[float, float, float] | None  # None: rescale to [0, 1] only (D-FINE)
+    std: tuple[float, float, float] | None
+
+
+SPECS = {
+    "rfdetr_n": Spec(384, IMAGENET_MEAN, IMAGENET_STD),
+    "dfine_n": Spec(640, None, None),
+}
 
 
 class Detector(Protocol):
@@ -56,6 +84,73 @@ def to_detections(xyxy: Sequence[Sequence[float]], scores: Sequence[float], labe
                               float(score), label))
 
     return dets
+
+
+def decode(boxes: np.ndarray, logits: np.ndarray, labels: dict[int, str],
+           size: tuple[int, int], frame: int, score_min: float, top_k: int = TOP_K) -> list[Detection]:
+    """DETR decode: per-class sigmoid, top-k query/class pairs, cxcywh → pixel Detections.
+
+    Mirrors rfdetr `PostProcess` and transformers `post_process_object_detection`: one
+    query may yield several classes. Class indices missing from `labels` are dropped
+    (RF-DETR's background slot). Boxes are clamped to the frame, as RF-DETR does.
+    """
+    scores = 1.0 / (1.0 + np.exp(-np.clip(logits, -SIGMOID_CLIP, SIGMOID_CLIP)))
+    flat = scores.ravel()
+    classes = scores.shape[1]
+    keep = min(top_k, flat.size)
+    order = np.argpartition(-flat, keep - 1)[:keep]
+
+    width, height = size
+    dets = []
+    for i in order:
+        score = float(flat[i])
+        label = labels.get(int(i) % classes)
+        if score < score_min or label is None:
+            continue
+
+        cx, cy, w, h = boxes[int(i) // classes]
+        x1 = min(max((cx - w / 2) * width, 0.0), width)
+        y1 = min(max((cy - h / 2) * height, 0.0), height)
+        x2 = min(max((cx + w / 2) * width, 0.0), width)
+        y2 = min(max((cy + h / 2) * height, 0.0), height)
+        dets.append(Detection(frame, (x1, y1, x2 - x1, y2 - y1), score, label))
+
+    return dets
+
+
+def _preprocess(frame: np.ndarray, spec: Spec) -> np.ndarray:
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    resized = cv2.resize(rgb, (spec.size, spec.size), interpolation=cv2.INTER_LINEAR)
+    chw = resized.transpose(2, 0, 1).astype(np.float32) / 255.0
+    if spec.mean is not None:
+        mean = np.array(spec.mean, dtype=np.float32)[:, None, None]
+        std = np.array(spec.std, dtype=np.float32)[:, None, None]
+        chw = (chw - mean) / std
+
+    return chw[None]
+
+
+def _split_outputs(outputs):
+    """Exported graphs name their outputs differently; boxes are the (*, 4) tensor."""
+    boxes = [o for o in outputs if o.shape[-1] == BOX_DIMS]
+    logits = [o for o in outputs if o.shape[-1] != BOX_DIMS]
+    if len(boxes) != 1 or len(logits) != 1:
+        raise ValueError(f"cannot tell boxes from logits in shapes {[o.shape for o in outputs]}")
+
+    return boxes[0][0], logits[0][0]
+
+
+def _artifact(name, suffix):
+    matches = sorted((EXPORTED / name).glob(f"*{suffix}"))
+    if not matches:
+        raise FileNotFoundError(f"no *{suffix} in {EXPORTED / name}; run benchmarks/export_detectors.py")
+
+    return matches[0]
+
+
+def _labels(name):
+    path = EXPORTED / name / LABELS_FILE
+    return {int(k): v for k, v in json.loads(path.read_text()).items()}
 
 
 class YoloDetector:
@@ -135,9 +230,79 @@ class DFineDetector:
                              frame_id, self._score_min)
 
 
+class OnnxDetector:
+    """An exported ONNX graph on one ONNX Runtime provider."""
+
+    def __init__(self, name: str, providers: list[str], score_min: float = SCORE_MIN):
+        self._name = name
+        self._spec = SPECS[name]
+        self._providers = providers
+        self._score_min = score_min
+        self._session = None
+
+    def load(self) -> None:
+        import onnxruntime as ort
+
+        self._labels = _labels(self._name)
+        self._session = ort.InferenceSession(str(_artifact(self._name, ".onnx")), providers=self._providers)
+        active = self._session.get_providers()[0]
+        if active != self._providers[0]:
+            raise RuntimeError(f"ORT runs on {active}, not the requested {self._providers[0]}")
+
+        self._input = self._session.get_inputs()[0].name
+
+    def detect(self, frame: np.ndarray, frame_id: int) -> list[Detection]:
+        outputs = self._session.run(None, {self._input: _preprocess(frame, self._spec)})
+        boxes, logits = _split_outputs(outputs)
+        return decode(boxes, logits, self._labels, (frame.shape[1], frame.shape[0]),
+                      frame_id, self._score_min)
+
+
+class CoreMlDetector:
+    """A Core ML package pinned to one set of compute units."""
+
+    def __init__(self, name: str, compute_units: str, precision: str = COREML_PRECISION,
+                 score_min: float = SCORE_MIN):
+        self._name = name
+        self._spec = SPECS[name]
+        self._compute_units = compute_units
+        self._precision = precision
+        self._score_min = score_min
+        self._model = None
+
+    def load(self) -> None:
+        import coremltools as ct
+
+        self._labels = _labels(self._name)
+        self._model = ct.models.MLModel(str(_artifact(self._name, f"_{self._precision}.mlpackage")),
+                                        compute_units=ct.ComputeUnit[self._compute_units])
+        self._input = self._model.get_spec().description.input[0].name
+
+    def detect(self, frame: np.ndarray, frame_id: int) -> list[Detection]:
+        outputs = self._model.predict({self._input: _preprocess(frame, self._spec)})
+        boxes, logits = _split_outputs(list(outputs.values()))
+        return decode(boxes, logits, self._labels, (frame.shape[1], frame.shape[0]),
+                      frame_id, self._score_min)
+
+
 DETECTORS = {
     "yolo26n": lambda **kw: YoloDetector(MODELS / "yolo26n.pt", **kw),
     "yolo11n": lambda **kw: YoloDetector(MODELS / "yolo11n.pt", **kw),
     "rfdetr_n": lambda **kw: RfDetrDetector(MODELS / "rf-detr-nano.pth", **kw),
     "dfine_n": lambda **kw: DFineDetector(MODELS / "dfine-nano-coco", **kw),
 }
+TORCH_DEVICES = {"pytorch-cpu": CPU, "pytorch-mps": "mps"}
+ORT_PROVIDERS = {"onnx-cpu": ["CPUExecutionProvider"],
+                 "onnx-coreml": ["CoreMLExecutionProvider", "CPUExecutionProvider"]}
+COREML_UNITS = {"coreml-cpu": "CPU_ONLY", "coreml-gpu": "CPU_AND_GPU", "coreml-ane": "CPU_AND_NE"}
+BACKENDS = [*TORCH_DEVICES, *ORT_PROVIDERS, *COREML_UNITS]
+
+
+def build(name: str, backend: str, precision: str = COREML_PRECISION) -> Detector:
+    if backend in TORCH_DEVICES:
+        return DETECTORS[name](device=TORCH_DEVICES[backend])
+
+    if backend in ORT_PROVIDERS:
+        return OnnxDetector(name, ORT_PROVIDERS[backend])
+
+    return CoreMlDetector(name, COREML_UNITS[backend], precision)

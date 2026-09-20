@@ -4,6 +4,7 @@
   uv run vectrax --source file:data/fixtures/single_target.mp4
   uv run vectrax --source file:clip.mp4 --headless --init-boxes 320,180,120,90 --out run.jsonl
   uv run vectrax --source file:data/sessions/NAME/video.mp4 --headless --render-out review.mp4
+  uv run vectrax --source camera:MacBook --detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage
 
 Headless operator input, first match wins: --init-boxes, the session's
 operator.jsonl, the clip's <clip>.init.json.
@@ -19,6 +20,9 @@ from pathlib import Path
 
 import cv2
 
+from vectrax.detection.coreml import CoreMlDetector
+from vectrax.detection.worker import STRIDE, InferenceWorker
+from vectrax.metrics import RunMode
 from vectrax.pipeline import Pipeline, build_camera_pipeline, build_file_pipeline
 from vectrax.recording import OPERATOR_LOG, SessionRecorder
 from vectrax.tracking.config import TrackingConfig
@@ -41,13 +45,22 @@ def _parse_boxes(text):
     return [tuple(float(v) for v in part.split(",")) for part in text.split(";")]
 
 
+def _worker(args, mode) -> InferenceWorker | None:
+    if not args.detect:
+        return None
+
+    return InferenceWorker(CoreMlDetector(Path(args.detect)), mode, stride=args.detect_stride)
+
+
 def _build(args) -> Pipeline:
     cfg = TrackingConfig()
     if args.source.startswith(FILE_PREFIX):
-        return build_file_pipeline(args.source[len(FILE_PREFIX):], cfg, scale=args.scale)
+        return build_file_pipeline(args.source[len(FILE_PREFIX):], cfg, scale=args.scale,
+                                   worker=_worker(args, RunMode.DETERMINISTIC))
 
     if args.source.startswith(CAMERA_PREFIX):
-        return build_camera_pipeline(args.source[len(CAMERA_PREFIX):], cfg, scale=args.scale)
+        return build_camera_pipeline(args.source[len(CAMERA_PREFIX):], cfg, scale=args.scale,
+                                     worker=_worker(args, RunMode.REALTIME))
 
     raise SystemExit(f"--source must start with {FILE_PREFIX} or {CAMERA_PREFIX}")
 
@@ -139,7 +152,8 @@ def _headless(args):
                 tick = pipe.process(frame)
                 out.write(json.dumps(_record(tick, w, h)) + "\n")
                 if review is not None:
-                    review.write(draw(frame.image, tick.tracks, {"frame": frame.frame_id}))
+                    review.write(draw(frame.image, tick.tracks, {"frame": frame.frame_id},
+                                      detections=tick.detections))
     finally:
         pipe.close()
         if review is not None:
@@ -169,6 +183,8 @@ def main(argv=None):
     p.add_argument("--record", nargs="?", const="", help=f"record session to {SESSIONS_DIR}/NAME")
     p.add_argument("--metrics-out", help="write latency summary JSON here")
     p.add_argument("--scale", type=float, default=1.0, help="propagator downscale (0,1]")
+    p.add_argument("--detect", help="Core ML detector package; detections are shown, not fused yet")
+    p.add_argument("--detect-stride", type=int, default=STRIDE, help="detect every Nth frame")
     args = p.parse_args(argv)
 
     summary = _headless(args) if args.headless else _interactive(args)

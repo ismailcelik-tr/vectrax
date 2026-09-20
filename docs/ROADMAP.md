@@ -110,7 +110,7 @@ Steps, one commit each, test first:
       Decode moves out of benchmarks/ so both callers share it.
 - [x] 2. InferenceWorker: own thread, capacity-1 input (drop-oldest),
       stride N. A slow detector must not slow the tick or build a queue.
-- [ ] 3. Late-result fusion: results carry the frame they saw; the
+- [x] 3. Late-result fusion (time alignment; the fuse itself is step 5): results carry the frame they saw; the
       correction is matched there and carried forward to the current frame.
 - [ ] 4. Associator: mutual-best IoU, class hint as weight only (R1).
       Two nearby targets must not swap (the 2b hijack case).

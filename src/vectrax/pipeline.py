@@ -3,10 +3,11 @@
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from vectrax.clock import Clock, MonotonicClock
+from vectrax.detection.history import TrackHistory
 from vectrax.events import EventBus
 from vectrax.frames import FramePacket
 from vectrax.metrics import FrameTiming, Metrics, RunMode
@@ -14,6 +15,7 @@ from vectrax.sources import CameraSource
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackManager, TrackSnapshot
+from vectrax.tracking.observation import Observation
 from vectrax.tracking.propagators import NanoPropagator, Propagator, ScoreSource
 from vectrax.tracking.state import Command
 
@@ -28,13 +30,19 @@ class Tick:
     frame: FramePacket
     tracks: list[TrackSnapshot]
     timing: FrameTiming
+    # Detections that finished by this tick; they saw an earlier frame and do
+    # not touch the tracks yet (fusion is Phase 3 step 5).
+    detections: list[Observation] = field(default_factory=list)
 
 
 class Pipeline:
-    def __init__(self, source: CameraSource, manager: TrackManager, bus: EventBus, clock: Clock, mode: RunMode):
+    def __init__(self, source: CameraSource, manager: TrackManager, bus: EventBus, clock: Clock,
+                 mode: RunMode, worker=None):
         self._source = source
         self._manager = manager
         self._clock = clock
+        self._worker = worker
+        self._history = TrackHistory()
         self._ops_lock = threading.Lock()
         self.bus = bus
         self.mode = mode
@@ -42,6 +50,8 @@ class Pipeline:
         self._recorder = None
         self._ops: list[dict] = []
         source.open()
+        if worker is not None:
+            worker.start()
 
     @property
     def dropped(self) -> int:
@@ -52,6 +62,9 @@ class Pipeline:
         return self._source.frame_size
 
     def close(self) -> None:
+        if self._worker is not None:
+            self._worker.stop()
+
         self._source.close()
         if self._recorder is not None:
             self._recorder.close()
@@ -85,7 +98,16 @@ class Pipeline:
         tracks = self._manager.step(frame)
         timing = FrameTiming(frame.capture_ns, frame.arrival_ns, tick_ns, self._clock.now_ns())
         self.metrics.observe(timing)
-        return Tick(frame, tracks, timing)
+        self._history.record(frame.frame_id, {t.track_id: t.box for t in tracks})
+        return Tick(frame, tracks, timing, self._detections(frame))
+
+    def _detections(self, frame: FramePacket) -> list[Observation]:
+        """Hand this frame to the detector and collect whatever has finished."""
+        if self._worker is None:
+            return []
+
+        self._worker.submit(frame)
+        return [o for result in self._worker.results() for o in result.observations]
 
     def rendered(self, tick: Tick) -> None:
         self.metrics.observe_render(tick.timing, self._clock.now_ns())
@@ -152,26 +174,28 @@ def _box_list(box):
     return None if box is None else [box.cx, box.cy, box.w, box.h]
 
 
-def _assemble(source, cfg, clock, mode, scale, propagator_factory=None):
+def _assemble(source, cfg, clock, mode, scale, propagator_factory=None, worker=None):
     bus = EventBus()
     # Worker threads live for the process; OpenCV releases the GIL in CSRT.
     executor = ThreadPoolExecutor(PROPAGATOR_WORKERS, thread_name_prefix="propagator")
     # ADR-008: NanoTrack, scored by NCC so a vanished target is not reported visible.
     factory = propagator_factory or (lambda: NanoPropagator(scale, score=ScoreSource.NCC))
     manager = TrackManager(cfg, factory, bus, executor)
-    return Pipeline(source, manager, bus, clock or MonotonicClock(), mode)
+    return Pipeline(source, manager, bus, clock or MonotonicClock(), mode, worker)
 
 
 def build_file_pipeline(path: Path | str, cfg: TrackingConfig, clock: Clock | None = None,
-                        scale: float = 1.0, propagator_factory: Callable[[], Propagator] | None = None) -> Pipeline:
+                        scale: float = 1.0, propagator_factory: Callable[[], Propagator] | None = None,
+                        worker=None) -> Pipeline:
     from vectrax.sources.file import FileSource
 
-    return _assemble(FileSource(path), cfg, clock, RunMode.DETERMINISTIC, scale, propagator_factory)
+    return _assemble(FileSource(path), cfg, clock, RunMode.DETERMINISTIC, scale, propagator_factory,
+                     worker)
 
 
 def build_camera_pipeline(query: str, cfg: TrackingConfig, clock: Clock | None = None,
-                          scale: float = 1.0) -> Pipeline:
+                          scale: float = 1.0, worker=None) -> Pipeline:
     # Imported lazily: AVFoundation is macOS-only.
     from vectrax.sources.mac import MacCamera
 
-    return _assemble(MacCamera(query), cfg, clock, RunMode.REALTIME, scale)
+    return _assemble(MacCamera(query), cfg, clock, RunMode.REALTIME, scale, worker=worker)

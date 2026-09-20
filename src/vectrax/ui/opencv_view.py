@@ -49,6 +49,7 @@ _COLORS = {
 }
 _PAUSABLE = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
 _DRAG_COLOR = (255, 0, 255)
+_DETECTION_COLOR = (0, 200, 255)
 _FOCUS_COLOR = (255, 255, 255)
 _TEXT_COLOR = (255, 255, 255)
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
@@ -158,9 +159,17 @@ class Controller:
         self.focus = min(hits)[1] if hits else None
 
 
-def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None, drag=None, pending=()):
+def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None, drag=None,
+         pending=(), detections=()):
     out = image.copy()
     h, w = out.shape[:2]
+    # Detections are drawn as evidence only; they do not drive any track yet.
+    for d in detections:
+        x, y, bw, bh = d.box.to_xywh_px(w, h)
+        cv2.rectangle(out, (x, y), (x + bw, y + bh), _DETECTION_COLOR, 1)
+        cv2.putText(out, f"{d.label} {d.score:.2f}", (x, y + bh + 14), _FONT, 0.45,
+                    _DETECTION_COLOR, 1)
+
     for t in tracks:
         color = _COLORS[t.state]
         x, y, bw, bh = t.box.to_xywh_px(w, h)
@@ -294,7 +303,8 @@ def _run_live(pipe, ctl, clock, max_frames):
                 ctl.update_tracks(tick.tracks)
                 meter.tick()
                 hud = _hud(pipe, tick.tracks, meter.fps, tick, ctl.focus)
-                cv2.imshow(WINDOW, draw(tick.frame.image, tick.tracks, hud, ctl.focus, ctl.drag))
+                cv2.imshow(WINDOW, draw(tick.frame.image, tick.tracks, hud, ctl.focus, ctl.drag,
+                                        detections=tick.detections))
 
             key = cv2.waitKey(LIVE_WAIT_MS)
             if tick is not None:
@@ -339,7 +349,8 @@ def _run_clip(pipe, ctl, clock, init_path, max_frames):
             ctl.update_tracks(tracks)
             meter.tick()
             hud = _hud(pipe, tracks, meter.fps, last_tick, ctl.focus)
-            cv2.imshow(WINDOW, draw(frame.image, tracks, hud, ctl.focus, ctl.drag))
+            cv2.imshow(WINDOW, draw(frame.image, tracks, hud, ctl.focus, ctl.drag,
+                                    detections=last_tick.detections))
             key = cv2.waitKey(LIVE_WAIT_MS)
             pipe.rendered(last_tick)
             shown = frame

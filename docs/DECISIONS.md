@@ -134,3 +134,43 @@ crossing_targets (279 frames); NCC scoring brings both to 0.
 **Tradeoff:** Nano+NCC does not re-find a target after it disappears
 (0/5); reacquisition is Phase 4's job, with identity checks. The quality
 model still misses partial occlusion (partial→DEGRADED ≤ 28 % for all).
+
+## ADR-009 RF-DETR Nano on Core ML fp16 as the detector (2026-09-20, ACCEPTED)
+
+**Decision:** The detector is RF-DETR Nano (Apache-2.0), run as a Core ML fp16
+package through coremltools. Default compute units are CPU_AND_GPU; CPU_AND_NE
+is the low-power alternative, selectable per run. The YOLOs stay reference-only
+(AGPL, R5) and are not shipped.
+
+**Alternatives:** YOLO26n, YOLO11n (reference), D-FINE Nano (Apache-2.0);
+backends PyTorch CPU/MPS, ONNX Runtime CPU and CoreML EP, Core ML fp32/fp16.
+
+**Evidence:** docs/EVALUATION.md (accuracy on 8 annotated fixtures, backend
+parity) and docs/PERFORMANCE.md (backend matrix, 5-minute sustained).
+- Accuracy: mean recall 77 % and AP50 79 for RF-DETR-N against 23–31 % recall
+  and 46–54 AP50 for the other three. It is the only candidate that finds the
+  cup on every fixture but fast_motion.
+- Speed: 8.3 ms p50 / 9.7 ms p95 on coreml-gpu fp16, versus 42.4 ms PyTorch CPU,
+  27.6 ms MPS, 46.6 ms ONNX CPU, 67.0 ms ONNX CoreML EP. Flat over 5 minutes
+  (34 471 inferences, per-minute p50 8.31–8.49 ms), RSS 875 MB peak.
+- fp16 matters: fp32 Core ML costs 16.0 ms on the GPU and gives the ANE nothing
+  (31.5 ms, CPU-level). The ANE path only engages with fp16.
+- ONNX and coreml-gpu decode identically to the PyTorch adapter (within one box
+  on two fixtures), so the exported graph plus our own `decode` is trustworthy.
+
+**Tradeoff:** Core ML compiles per bundle on first use — up to ~5.7 s cold,
+~0.15 s once macOS has cached it; Phase 3 must warm the detector before the
+operator can rely on it. The ANE alternative saves 11 W and cools the machine
+(73 → 60 °C over 5 minutes, against 66 → 77 °C on the GPU) for 2.5 ms more
+latency, but it is the one backend that does not decode identically: occlusion
+recall 69 % vs 71 %, AP50 77 vs 81. GPU is the default because its accuracy is
+verified equal to PyTorch; revisit if Phase 3 finds the UI and propagators
+contending for the GPU.
+
+**Consequence:** the detector needs a Core ML bundle built from
+`benchmarks/export_detectors.py`, not a `.pth` — Phase 3 ships the export step
+with the runtime module. Detection is COCO-class based, so the transparent
+container of non_coco is only found 39 % of the time and often under the wrong
+label; R1 reacquisition cannot lean on the detector label (Phase 4, appearance).
+fast_motion stays weak (40 % recall) for every candidate: motion blur, not model
+choice.

@@ -85,11 +85,14 @@ measured. Open issues carried forward: reacquisition, identity hijack,
    class-agnostic recall for non_coco) was missing; added in 2c.
 2b [done → ADR-008 NanoTrack+NCC] Propagators: CSRT, KCF, ViTTrack (OpenCV Zoo, Apache-2.0), NanoTrack
    (only if licence verifies). Accuracy + ms/target → ADR-008.
-2c Detectors: YOLO26n, YOLO11n (AGPL, reference only); RF-DETR-N, D-FINE-N
-   (Apache-2.0, runtime candidates). Backends: PyTorch CPU/MPS, ONNX Runtime
-   CPU/CoreML EP, Core ML. Load/compile, p50/p95, CPU/GPU/ANE, RSS, 5-min
-   sustained for top 2; fixture accuracy. COCO val only if results look
-   wrong. → ADR-009.
+2c [done → ADR-009 RF-DETR-N on Core ML fp16] Detectors: YOLO26n, YOLO11n
+   (AGPL, reference only); RF-DETR-N, D-FINE-N (Apache-2.0, runtime
+   candidates). Detection P/R/AP50 harness, fixture accuracy (EVALUATION.md),
+   backend matrix and 5-min sustained (PERFORMANCE.md). COCO val not needed:
+   RF-DETR-N leads every fixture except non_coco recall (D-FINE 63 % vs 39 %).
+   Open: D-FINE has no Core ML path (coremltools 9.0 vs torch 2.14) and ORT's
+   CoreML EP rejects its graph — PROVISIONAL, see docs/SETUP.md. Core ML ANE
+   decodes slightly differently from the other backends (EVALUATION.md).
 Out of scope: open-vocabulary detectors (AGPL or too heavy); R1
 reacquisition goes through appearance (Phase 4). SAM 2 is not a runtime
 candidate (~1.1 s/frame on MPS), so SAM 2 pre-labels do not bias results;

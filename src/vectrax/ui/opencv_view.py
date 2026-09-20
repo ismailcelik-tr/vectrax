@@ -24,6 +24,7 @@ __all__ = ["TITLE_BAR_PT", "Action", "Controller", "draw", "load_init", "run_ui"
 
 WINDOW = "VectraX"
 MIN_DRAG_PX = 8
+SMALL_DRAG_NOTICE = f"box too small: drag at least {MIN_DRAG_PX} px"
 LIVE_WAIT_MS = 1
 RENDER_POLL_S = 0.005
 FROZEN_WAIT_MS = 15
@@ -73,6 +74,9 @@ class Controller:
         self._reselect = False
         self.focus: int | None = None
         self.selected: list[tuple[int, int, int, int]] = []
+        # Shown until the next selection; a drag too small to be a box would
+        # otherwise look like nothing happened at all.
+        self.notice: str | None = None
 
     @property
     def drag(self):
@@ -103,8 +107,12 @@ class Controller:
         rect = (min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0))
         if rect[2] < MIN_DRAG_PX or rect[3] < MIN_DRAG_PX:
             self._focus_at(x1, y1)
+            if self.focus is None:
+                self.notice = SMALL_DRAG_NOTICE
+
             return
 
+        self.notice = None
         box = Box.from_xywh_px(*rect, self._w, self._h)
         if self._reselect and self.focus is not None:
             self._reselect = False
@@ -160,7 +168,7 @@ class Controller:
 
 
 def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None, drag=None,
-         pending=(), detections=()):
+         pending=(), detections=(), notice: str | None = None):
     out = image.copy()
     h, w = out.shape[:2]
     # Detections are drawn as evidence only; they do not drive any track yet.
@@ -199,6 +207,9 @@ def draw(image, tracks: list[TrackSnapshot], hud: dict, focus: int | None = None
         lines.append(PAUSED_HINT)
     for i, text in enumerate(lines):
         cv2.putText(out, text, (10, 20 + 18 * i), _FONT, 0.45, _TEXT_COLOR, 1)
+
+    if notice is not None:
+        cv2.putText(out, notice, (10, 20 + 18 * len(lines)), _FONT, 0.5, _DRAG_COLOR, 1)
 
     return out
 
@@ -304,7 +315,7 @@ def _run_live(pipe, ctl, clock, max_frames):
                 meter.tick()
                 hud = _hud(pipe, tick.tracks, meter.fps, tick, ctl.focus)
                 cv2.imshow(WINDOW, draw(tick.frame.image, tick.tracks, hud, ctl.focus, ctl.drag,
-                                        detections=tick.detections))
+                                        detections=tick.detections, notice=ctl.notice))
 
             key = cv2.waitKey(LIVE_WAIT_MS)
             if tick is not None:
@@ -335,7 +346,8 @@ def _run_clip(pipe, ctl, clock, init_path, max_frames):
 
             pending = ctl.selected if last_tick is None else ()
             hud = _hud(pipe, tracks, meter.fps, last_tick, ctl.focus)
-            cv2.imshow(WINDOW, draw(shown.image, tracks, hud, ctl.focus, ctl.drag, pending))
+            cv2.imshow(WINDOW, draw(shown.image, tracks, hud, ctl.focus, ctl.drag, pending,
+                                    notice=ctl.notice))
             key = cv2.waitKey(FROZEN_WAIT_MS)
         else:
             frame, first = (first, None) if first is not None else (pipe.read(), None)
@@ -350,7 +362,7 @@ def _run_clip(pipe, ctl, clock, init_path, max_frames):
             meter.tick()
             hud = _hud(pipe, tracks, meter.fps, last_tick, ctl.focus)
             cv2.imshow(WINDOW, draw(frame.image, tracks, hud, ctl.focus, ctl.drag,
-                                    detections=last_tick.detections))
+                                    detections=last_tick.detections, notice=ctl.notice))
             key = cv2.waitKey(LIVE_WAIT_MS)
             pipe.rendered(last_tick)
             shown = frame

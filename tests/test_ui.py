@@ -156,3 +156,37 @@ def test_window_fits_screen_keeping_aspect():
 
 def test_window_never_shrinks_below_frame_on_big_screen():
     assert window_size((1280, 720), (3000, 2000))[0] >= 1280
+
+
+def test_too_small_a_drag_says_so_instead_of_doing_nothing():
+    """A drag under MIN_DRAG_PX outside any track used to be a silent focus click,
+    so an operator aiming at a pupil got no target and no explanation."""
+    pipe = FakePipe()
+    ctl = Controller(pipe, (W, H))
+
+    _drag(ctl, 300, 200, 304, 203)
+
+    assert pipe.calls == []
+    assert "small" in ctl.notice.lower()
+
+
+def test_a_click_inside_a_track_focuses_it_without_a_notice():
+    pipe = FakePipe()
+    ctl = Controller(pipe, (W, H))
+    ctl.update_tracks([_snap(7, TrackState.TRACKING)])
+
+    _drag(ctl, W // 2, H // 2, W // 2 + 2, H // 2 + 2)
+
+    assert ctl.focus == 7
+    assert ctl.notice is None
+
+
+def test_a_real_drag_clears_an_earlier_notice():
+    pipe = FakePipe()
+    ctl = Controller(pipe, (W, H))
+
+    _drag(ctl, 300, 200, 304, 203)
+    _drag(ctl, 64, 36, 192, 108)
+
+    assert ctl.notice is None
+    assert pipe.calls[0][0] == "select"

@@ -81,3 +81,58 @@ Reading:
   crossing_targets (279 frames). NCC removes both at the cost of recovery.
 - No variant reports partial occlusion as DEGRADED (0–28 %): open issue in
   the quality model, not the propagator.
+
+## Detector accuracy (2c, 2026-09-20, git 6c4db5d, PyTorch CPU)
+
+Command: `uv run benchmarks/detection_eval.py --detector <name>`. Raw:
+`benchmarks/results/detection/20260920-1559*` … `-161007_*`. Every frame of
+all 8 fixtures; precision and recall at score ≥ 0.5, AP50 over all scores.
+
+Scoring rule: fixture GT labels the target objects only, so each fixture is
+scored on the single class it annotates (6 × cup, exit_reentry person).
+non_coco's food container has no COCO class and is scored class-agnostically;
+that makes its precision uninterpretable — every unlabelled person, chair or
+other cup in frame counts as a false positive — so only its recall compares.
+
+Recall (%) at score ≥ 0.5:
+
+| Fixture | YOLO26n | YOLO11n | RF-DETR-N | D-FINE-N |
+|---|---|---|---|---|
+| single_target | 25 | 58 | **96** | 14 |
+| crossing_targets | 16 | 20 | **89** | 12 |
+| near_targets | 11 | 30 | **95** | 13 |
+| occlusion | 15 | 8 | **71** | 17 |
+| exit_reentry (person) | 96 | 96 | 96 | 96 |
+| fast_motion | 0 | 2 | **40** | 2 |
+| non_coco (class-agnostic) | 8 | 16 | 39 | **63** |
+| low_light | 15 | 15 | **88** | 27 |
+| **mean** | 23 | 31 | **77** | 31 |
+
+AP50 (%):
+
+| Fixture | YOLO26n | YOLO11n | RF-DETR-N | D-FINE-N |
+|---|---|---|---|---|
+| single_target | 80 | 74 | **100** | 44 |
+| crossing_targets | 58 | 49 | **94** | 51 |
+| near_targets | 64 | 65 | **99** | 69 |
+| occlusion | 48 | 21 | **81** | 51 |
+| exit_reentry (person) | **96** | **96** | 95 | **96** |
+| fast_motion | 11 | 11 | **49** | 30 |
+| non_coco (class-agnostic) | 15 | 18 | 17 | **19** |
+| low_light | 59 | 37 | **99** | 73 |
+| **mean** | 54 | 46 | **79** | 54 |
+
+Precision on the labelled classes is 88–100 % for all four, except
+fast_motion, where every model has under 10 true positives (50–83 %).
+
+Reading:
+- RF-DETR-N is the only candidate that finds the cup reliably: 71–96 % recall
+  on seven fixtures against 8–30 % for the others, mean AP50 79 vs 46–54.
+- person is easy for everyone (96 % recall): exit_reentry separates nothing.
+- Low recall next to much higher AP50 (D-FINE single_target 14 % vs 44 AP50)
+  means the box is found but scored under 0.5 — calibration, not blindness. A
+  per-class threshold would recover part of it; RF-DETR needs no such tuning.
+- fast_motion is hard for all (motion blur); best is RF-DETR at 40 % recall.
+- non_coco: D-FINE reaches 63 % recall, RF-DETR 39 %. The transparent
+  container is detected as some COCO class; R1 cannot rely on the label.
+- The YOLOs are AGPL reference only (R5) and are also the weakest here.

@@ -1,0 +1,106 @@
+{
+  "detector": "yolo11n",
+  "backend": "pytorch-cpu",
+  "score_min": 0.5,
+  "git_sha": "6c4db5d",
+  "git_dirty": false,
+  "macos": "27.0",
+  "fixtures": [
+    {
+      "fixture": "single_target",
+      "label": "cup",
+      "frames": 600,
+      "detections": 2829,
+      "gt_count": 600,
+      "tp": 346,
+      "fp": 9,
+      "precision": 0.9746478873239437,
+      "recall": 0.5766666666666667,
+      "ap50": 0.739508225266668
+    },
+    {
+      "fixture": "crossing_targets",
+      "label": "cup",
+      "frames": 600,
+      "detections": 3755,
+      "gt_count": 1049,
+      "tp": 205,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.1954242135367016,
+      "ap50": 0.48613709157939733
+    },
+    {
+      "fixture": "near_targets",
+      "label": "cup",
+      "frames": 600,
+      "detections": 3549,
+      "gt_count": 1190,
+      "tp": 358,
+      "fp": 16,
+      "precision": 0.9572192513368984,
+      "recall": 0.30084033613445377,
+      "ap50": 0.6517310199077452
+    },
+    {
+      "fixture": "occlusion",
+      "label": "cup",
+      "frames": 751,
+      "detections": 5210,
+      "gt_count": 371,
+      "tp": 31,
+      "fp": 4,
+      "precision": 0.8857142857142857,
+      "recall": 0.08355795148247978,
+      "ap50": 0.2130360284409682
+    },
+    {
+      "fixture": "exit_reentry",
+      "label": "person",
+      "frames": 751,
+      "detections": 5086,
+      "gt_count": 421,
+      "tp": 405,
+      "fp": 18,
+      "precision": 0.9574468085106383,
+      "recall": 0.9619952494061758,
+      "ap50": 0.9614153538028267
+    },
+    {
+      "fixture": "fast_motion",
+      "label": "cup",
+      "frames": 451,
+      "detections": 2402,
+      "gt_count": 451,
+      "tp": 9,
+      "fp": 5,
+      "precision": 0.6428571428571429,
+      "recall": 0.019955654101995565,
+      "ap50": 0.11496412700552827
+    },
+    {
+      "fixture": "non_coco",
+      "label": "any",
+      "frames": 600,
+      "detections": 4071,
+      "gt_count": 600,
+      "tp": 95,
+      "fp": 605,
+      "precision": 0.1357142857142857,
+      "recall": 0.15833333333333333,
+      "ap50": 0.18062109535568313
+    },
+    {
+      "fixture": "low_light",
+      "label": "cup",
+      "frames": 601,
+      "detections": 1938,
+      "gt_count": 601,
+      "tp": 88,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.1464226289517471,
+      "ap50": 0.37122785958465204
+    }
+  ]
+}

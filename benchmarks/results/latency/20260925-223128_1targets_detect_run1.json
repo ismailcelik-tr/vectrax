@@ -1,0 +1,85 @@
+{
+  "targets": 1,
+  "box_px": 160,
+  "frames": 900,
+  "warmup": 30,
+  "dropped": 35,
+  "env": {
+    "macos": "27.0",
+    "python": "3.13.14",
+    "git_sha": "532b45c",
+    "git_dirty": false,
+    "power": "Now drawing from 'AC Power'"
+  },
+  "mode": "realtime",
+  "rendered": 901,
+  "track_ms": {
+    "n": 900,
+    "p50": 4.126,
+    "p95": 4.723,
+    "p99": 4.993,
+    "max": 6.428
+  },
+  "capture_to_arrival_ms": {
+    "n": 900,
+    "p50": 48.993,
+    "p95": 52.491,
+    "p99": 53.422,
+    "max": 54.614
+  },
+  "arrival_to_tick_ms": {
+    "n": 900,
+    "p50": 0.255,
+    "p95": 0.473,
+    "p99": 0.564,
+    "max": 0.705
+  },
+  "capture_to_tracked_ms": {
+    "n": 900,
+    "p50": 53.604,
+    "p95": 57.011,
+    "p99": 58.014,
+    "max": 59.134
+  },
+  "capture_to_render_ms": {
+    "n": 901,
+    "p50": 70.713,
+    "p95": 87.358,
+    "p99": 93.712,
+    "max": 96.552
+  },
+  "detection": {
+    "detector": "models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage",
+    "stride": 2,
+    "submit_ms": {
+      "n": 900,
+      "p50": 0.003,
+      "p95": 0.009,
+      "p99": 0.011,
+      "max": 0.017
+    },
+    "age_frames": {
+      "n": 450,
+      "p50": 1.0,
+      "p95": 1.0,
+      "max": 1
+    },
+    "age_ms": {
+      "n": 450,
+      "p50": 33.339,
+      "p95": 33.349,
+      "p99": 33.358,
+      "max": 33.365
+    },
+    "inference_ms": {
+      "n": 450,
+      "p50": 16.303,
+      "p95": 22.482,
+      "p99": 24.45,
+      "max": 25.316
+    },
+    "processed": 465,
+    "dropped": 0,
+    "failures": 0
+  }
+}

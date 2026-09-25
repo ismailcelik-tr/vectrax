@@ -212,13 +212,19 @@ Reading:
 - Live inference is ~2× the isolated 8.3 ms (Detector backends); cause not
   examined.
 - 1 target on: the track was dead for most frames (tracking p50 0.04 ms),
-  while the same box held with detection off. Also so in the earlier
-  session below. Cause not examined; its R3a omits the ~4 ms of one live
-  track, well inside the 45 ms margin.
+  while the same box held with detection off; so too in the earlier session
+  below. It did not reproduce: `--targets 1,1 --detect` right after (~22:31,
+  `20260925-223128_1targets_detect_run{1,2}.json`, git `532b45c`) kept the
+  track alive in both runs (tracking p50 / p95 4.1 / 4.7 and 4.1 / 4.8 ms,
+  R3a p95 57.0 and 58.3 ms). Not a detection effect on this evidence; cause
+  unknown.
 - The 50 dropped frames fall outside the timed window: queue wait max 0.8 ms
-  and tick max 4.6 ms cannot drop a 33 ms frame. The camera opens before
-  the worker loads the detector (Pipeline constructor); likely there, not
-  confirmed. `rendered` 901 vs 900: known warm-up race (above).
+  and tick max 4.6 ms cannot drop a 33 ms frame. Only the first run of each
+  invocation drops (49, 50, 35 over three invocations; 0 in every later run,
+  which reloads the detector too). The camera opens before the worker loads
+  the detector (Pipeline constructor); a slower first load in the process is
+  the likely cause, not confirmed. `rendered` 901 vs 900: known warm-up race
+  (above).
 - An earlier session (~22:18, `20260925-221812_*`, `20260925-221928_*`) ran
   on an untextured scene: tracks dead in three of four runs. R3a p95 56.6 /
   57.4 ms with detection on (1 / 3 targets); same outcome.

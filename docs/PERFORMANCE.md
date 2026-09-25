@@ -169,3 +169,56 @@ Command: as above with `--sustained-s 300`. Raw:
   started at 66 °C); the absolute package watts include whatever else the
   machine was doing, so compare the two rows with each other, not with vendor
   figures.
+
+## Live latency with detection on (2026-09-25 ~22:25, AC power, MacBook)
+
+Command: `uv run benchmarks/live_latency.py --targets 1,3 [--detect
+models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage]`, detection
+run first, then without; camera, light and scene still. Textured objects
+under the boxes. NanoTrack+NCC (ADR-008), RF-DETR-N Core ML fp16 on the GPU
+(ADR-009), stride 2. Raw: `benchmarks/results/latency/20260925-222528_*`
+(on), `20260925-222633_*` (off), git `ad77eb2`, clean tree.
+
+| ms, p50 / p95 | 1 target on | 1 target off | 3 targets on | 3 targets off |
+|---|---|---|---|---|
+| sensor PTS → arrival | 51.2 / 54.8 | 54.6 / 67.1 | 48.8 / 52.2 | 53.9 / 57.5 |
+| arrival → tick | 0.3 / 0.5 | 0.3 / 0.5 | 0.2 / 0.5 | 0.3 / 0.4 |
+| tracking | 0.04 / 0.07 | 3.8 / 5.1 | 4.9 / 5.7 | 4.9 / 5.8 |
+| **sensor → tracked (R3a)** | **51.5 / 55.2** | 59.0 / 67.6 | **54.2 / 57.8** | 59.3 / 63.2 |
+| **sensor → render (R3b)** | **71.1 / 86.9** | 74.8 / 86.3 | **71.1 / 87.2** | 74.9 / 80.9 |
+| frames dropped | 50 | 0 | 0 | 0 |
+
+Detection, runs with it on (450 fused results each, after warm-up):
+
+| | 1 target | 3 targets |
+|---|---|---|
+| `submit()` on the tick thread, ms p50 / p95 / max | 0.003 / 0.008 / 0.019 | 0.003 / 0.009 / 0.024 |
+| result age at fusion, frames p50 / p95 / max | 1 / 1 / 1 | 1 / 1 / 1 |
+| result age at fusion, ms (capture to capture) p50 / max | 33.3 / 33.4 | 33.3 / 33.4 |
+| inference, ms p50 / p95 / max | 17.4 / 22.6 / 28.2 | 15.6 / 21.1 / 23.7 |
+| inferences / dropped by the worker / failures | 465 / 0 / 0 | 465 / 0 / 0 |
+
+R3a (≤ 100) and R3b (≤ 120) met with detection on, 1 and 3 targets. With
+3 live tracks and detection on: R3a p95 57.8 ms, R3b p95 87.2 ms.
+
+Reading:
+- Detection stays off the tick path: `submit` costs microseconds, queue wait
+  and tracking time are unchanged (3 targets 4.9 ms p50 on and off). Every
+  result is fused on the frame after the one it saw; the worker never
+  dropped a frame at stride 2.
+- On vs off differences in R3a come from sensor → arrival (49–55 ms p50
+  here), whose run-to-run spread is known (~10 ms, "Camera format vs frame
+  age"), not from detection. Compare the spans after arrival.
+- Live inference is ~2× the isolated 8.3 ms (Detector backends); cause not
+  examined.
+- 1 target on: the track was dead for most frames (tracking p50 0.04 ms),
+  while the same box held with detection off. Also so in the earlier
+  session below. Cause not examined; its R3a omits the ~4 ms of one live
+  track, well inside the 45 ms margin.
+- The 50 dropped frames fall outside the timed window: queue wait max 0.8 ms
+  and tick max 4.6 ms cannot drop a 33 ms frame. The camera opens before
+  the worker loads the detector (Pipeline constructor); likely there, not
+  confirmed. `rendered` 901 vs 900: known warm-up race (above).
+- An earlier session (~22:18, `20260925-221812_*`, `20260925-221928_*`) ran
+  on an untextured scene: tracks dead in three of four runs. R3a p95 56.6 /
+  57.4 ms with detection on (1 / 3 targets); same outcome.

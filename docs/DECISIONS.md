@@ -174,3 +174,54 @@ container of non_coco is only found 39 % of the time and often under the wrong
 label; R1 reacquisition cannot lean on the detector label (Phase 4, appearance).
 fast_motion stays weak (40 % recall) for every candidate: motion blur, not model
 choice.
+
+## ADR-010 Detection scheduling and fusion (2026-09-25, ACCEPTED)
+
+**Decision:** The detector runs every 2nd frame (15 Hz at 30 fps) on its own
+thread behind a capacity-1, drop-oldest buffer; the tick never waits for it.
+Each result carries the frame it saw and is fused on a later tick — also in
+DETERMINISTIC, where inference runs inline but is fused one tick late, like
+REALTIME. Association is mutual-best IoU (gate 0.3); ties match nothing; the
+class is a weight (×1.2), never a pass through the gate. Fusion is asymmetric:
+- A matched detection may lift DEGRADED/OCCLUDED to TRACKING for 0.2 s after
+  the frame it saw (`detection_hold_ns`), and corrects the Kalman box.
+- No detection never demotes a track: a COCO detector cannot see arbitrary
+  targets (the paper and pupils in data/sessions were never detected).
+- A track's label is taken only from a detection matched while INITIALIZING;
+  only that class lifts it. A target the detector did not recognise at
+  selection is never lifted.
+- The propagator is not re-initialised on a match; that is Phase 4
+  reacquisition.
+TrackManager stays the only place that changes state. Thresholds live in
+TrackingConfig and are PROVISIONAL.
+
+**Alternatives:** detection every frame (owner: later, once measured headroom
+allows); symmetric fusion (a missed detection demotes) — rejected, it would
+drop every non-COCO target; lifting on any class — rejected, a chair behind
+the gone phone lifted it for 49 frames (demo_20260920); re-initialising the
+propagator on each match — deferred to Phase 4.
+
+**Evidence:**
+- demo_20260920, phone track: frames read OCCLUDED/LOST while a phone was
+  detected 557 → 5; frames lifted with no phone detected 15, all 2–4 frames
+  after the last detection (within the hold). Paper and pupil tracks
+  (demo_detect, demo_fixed) unchanged. Replays, not a registered benchmark.
+- Fixtures (docs/EVALUATION.md, detection fusion): success single_target
+  93 → 100 %, crossing_targets 29 → 55 %, near_targets 50 → 100 %, low_light
+  96 → 100 %; occlusion and non_coco unchanged.
+- Latency (docs/PERFORMANCE.md, detection on, live): R3a p95 55.2 / 57.8 ms
+  and R3b p95 86.9 / 87.2 ms for 1 / 3 targets. Every result fused one frame
+  after the one it saw (p50 = p95 = max = 1). `submit` costs the tick 0.003 ms
+  p50; tracking time unchanged; the worker dropped no frame. Live inference
+  15.6–17.4 ms p50.
+
+**Tradeoff:** 3 hijack frames on crossing_targets, 4 false-visible frames on
+exit_reentry, fast_motion −1 point; causes not yet examined. Near-equal
+candidates (IoU 0.61 vs 0.60) go to the higher one; whether a margin is
+needed is open. The UI shows the propagator score, so a lifted track can read
+"score 0.1, TRACKING". Results older than the history window (1 s) are
+dropped silently; SPEC requires them counted.
+
+**Consequence:** detection adds evidence only to classes COCO covers;
+everything else still rests on the propagator and its quality score (Phase 4:
+appearance, reacquisition, one track per object).

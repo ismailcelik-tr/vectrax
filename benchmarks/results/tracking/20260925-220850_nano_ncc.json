@@ -1,0 +1,171 @@
+{
+  "propagator": "nano_ncc",
+  "detector": null,
+  "git_sha": "e541055",
+  "git_dirty": false,
+  "macos": "27.0",
+  "fixtures": [
+    {
+      "fixture": "single_target",
+      "success": 0.93,
+      "on_target": 0.9866666666666667,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 2.941,
+      "states": {
+        "visible->degraded": 90,
+        "visible->initializing": 2,
+        "visible->occluded": 8,
+        "visible->tracking": 500
+      }
+    },
+    {
+      "fixture": "crossing_targets",
+      "success": 0.292436974789916,
+      "on_target": 0.32100840336134456,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [
+        null
+      ],
+      "partial_as_degraded": 0.03546099290780142,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 3.696,
+      "states": {
+        "partial->degraded": 3,
+        "partial->occluded": 66,
+        "partial->tracking": 1,
+        "visible->degraded": 7,
+        "visible->initializing": 2,
+        "visible->occluded": 40,
+        "visible->tracking": 54,
+        "absent->lost": 10,
+        "partial->lost": 60,
+        "visible->lost": 357
+      }
+    },
+    {
+      "fixture": "near_targets",
+      "success": 0.505,
+      "on_target": 0.5058333333333334,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [],
+      "partial_as_degraded": 0.0,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.032,
+      "states": {
+        "visible->degraded": 2,
+        "visible->initializing": 2,
+        "visible->occluded": 89,
+        "visible->tracking": 12,
+        "partial->initializing": 2,
+        "partial->tracking": 8,
+        "visible->lost": 487
+      }
+    },
+    {
+      "fixture": "occlusion",
+      "success": 0.09213483146067415,
+      "on_target": 0.09438202247191012,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [
+        null,
+        null,
+        null
+      ],
+      "partial_as_degraded": 0.0,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 0.012,
+      "states": {
+        "absent->lost": 224,
+        "absent->occluded": 82,
+        "partial->lost": 69,
+        "partial->occluded": 5,
+        "visible->degraded": 2,
+        "visible->initializing": 2,
+        "visible->lost": 327,
+        "visible->occluded": 2,
+        "visible->tracking": 38
+      }
+    },
+    {
+      "fixture": "exit_reentry",
+      "success": 0.35629453681710216,
+      "on_target": 0.35629453681710216,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [
+        null,
+        null
+      ],
+      "partial_as_degraded": null,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 0.018,
+      "states": {
+        "absent->lost": 249,
+        "absent->occluded": 81,
+        "visible->degraded": 9,
+        "visible->initializing": 2,
+        "visible->lost": 261,
+        "visible->occluded": 10,
+        "visible->tracking": 139
+      }
+    },
+    {
+      "fixture": "fast_motion",
+      "success": 0.19955654101995565,
+      "on_target": 0.22394678492239467,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.032,
+      "states": {
+        "visible->degraded": 75,
+        "visible->initializing": 2,
+        "visible->occluded": 239,
+        "visible->tracking": 135
+      }
+    },
+    {
+      "fixture": "non_coco",
+      "success": 0.4683333333333333,
+      "on_target": 0.7616666666666667,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.126,
+      "states": {
+        "visible->degraded": 91,
+        "visible->initializing": 2,
+        "visible->occluded": 129,
+        "visible->tracking": 378
+      }
+    },
+    {
+      "fixture": "low_light",
+      "success": 0.9633943427620633,
+      "on_target": 0.9633943427620633,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.044,
+      "states": {
+        "visible->degraded": 61,
+        "visible->initializing": 2,
+        "visible->occluded": 22,
+        "visible->tracking": 516
+      }
+    }
+  ]
+}

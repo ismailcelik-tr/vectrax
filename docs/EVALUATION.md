@@ -161,3 +161,34 @@ adapter. Command: `uv run benchmarks/detection_eval.py --detector <d>
   resize filter differs: the HF processor uses antialiased PIL bilinear, our
   adapter `cv2.INTER_LINEAR`. RF-DETR has no such gap — its own `predict()`
   resizes with `antialias=False`, which is what cv2 does.
+
+## Detection fusion (Phase 3, 2026-09-25, git e541055)
+
+Command: `uv run benchmarks/tracking_eval.py --propagator nano_ncc
+[--detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage]`.
+Raw: `benchmarks/results/tracking/20260925-220850_nano_ncc.json` (off),
+`20260925-155013_nano_ncc_detect.json` (on). Clean tree, both runs.
+Detection every 2nd frame, fused one tick late (ADR-010). The run without
+detection matches the 2b Nano+NCC column exactly.
+
+| Fixture | success off | success on | hijack on | falseVis on |
+|---|---|---|---|---|
+| single_target | 93 | **100** | 0 | 0 |
+| crossing_targets | 29 | **55** | 3 | 0 |
+| near_targets | 50 | **100** | 0 | 0 |
+| occlusion | 9 | 9 | 0 | 0 |
+| exit_reentry | 36 | 37 | 0 | 4 |
+| fast_motion | 20 | 19 | 0 | 0 |
+| non_coco | 47 | 47 | 0 | 0 |
+| low_light | 96 | **100** | 0 | 0 |
+
+Reading:
+- Gains come where the detector sees the target's class and the propagator's
+  NCC score dips: DEGRADED/OCCLUDED frames lifted back to TRACKING, and the
+  matched box corrects the Kalman state.
+- occlusion and non_coco unchanged: no reacquisition (Phase 4), and the
+  container is not a COCO class the detector matched at selection.
+- Costs, causes not yet examined: 3 hijack frames on crossing_targets,
+  4 false-visible frames on exit_reentry, fast_motion −1 point.
+- Recoveries unchanged (none): a detection lifts a live track, it does not
+  re-find a lost one.

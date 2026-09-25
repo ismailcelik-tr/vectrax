@@ -131,8 +131,12 @@ Steps, one commit each, test first:
       hold). Paper and pupil tracks (demo_detect, demo_fixed) unchanged:
       the detector never matched them at selection. Detections are now
       fused one tick late in DETERMINISTIC too, like REALTIME.
-- [ ] 6. 1–3 targets: R3a/R3b measured with detection on → PERFORMANCE.md,
-      ADR-010 (detection scheduling and fusion).
+- [x] 6. 1–3 targets: R3a/R3b measured with detection on → PERFORMANCE.md,
+      ADR-010 (detection scheduling and fusion). R3a p95 55.2 / 57.8 ms,
+      R3b p95 86.9 / 87.2 ms (1 / 3 targets); results fused one frame late.
+      Fixture gains and costs in EVALUATION.md. Open: with detection on,
+      the 1-target benchmark track died in both sessions; with it off it
+      held on the textured scene. Not examined.
 
 Acceptance: tests green, ruff clean; deterministic replay reproduces runs;
 R3a p95 ≤ 100 ms with detection on; owner verifies on camera.

@@ -1,0 +1,51 @@
+{
+  "targets": 3,
+  "box_px": 160,
+  "frames": 900,
+  "warmup": 30,
+  "dropped": 0,
+  "env": {
+    "macos": "27.0",
+    "python": "3.13.14",
+    "git_sha": "ad77eb2",
+    "git_dirty": false,
+    "power": "Now drawing from 'AC Power'"
+  },
+  "mode": "realtime",
+  "rendered": 901,
+  "track_ms": {
+    "n": 900,
+    "p50": 5.599,
+    "p95": 7.098,
+    "p99": 7.77,
+    "max": 9.057
+  },
+  "capture_to_arrival_ms": {
+    "n": 900,
+    "p50": 53.311,
+    "p95": 55.718,
+    "p99": 56.263,
+    "max": 56.995
+  },
+  "arrival_to_tick_ms": {
+    "n": 900,
+    "p50": 0.268,
+    "p95": 0.336,
+    "p99": 0.471,
+    "max": 1.918
+  },
+  "capture_to_tracked_ms": {
+    "n": 900,
+    "p50": 59.386,
+    "p95": 62.042,
+    "p99": 63.259,
+    "max": 64.258
+  },
+  "capture_to_render_ms": {
+    "n": 901,
+    "p50": 74.819,
+    "p95": 78.86,
+    "p99": 83.219,
+    "max": 88.444
+  }
+}

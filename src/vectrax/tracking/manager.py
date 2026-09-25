@@ -6,16 +6,19 @@ of the next step, so every change is tied to a frame and replays identically.
 
 import threading
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass
 from enum import Enum, auto
 
 from vectrax.events import Event, EventBus, EventType
 from vectrax.frames import FramePacket
+from vectrax.tracking.association import associate
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
+from vectrax.tracking.history import TrackHistory, carry_forward
 from vectrax.tracking.kalman import CvKalman
+from vectrax.tracking.observation import Observation
 from vectrax.tracking.propagators import Propagator
 from vectrax.tracking.quality import TrackQuality
 from vectrax.tracking.state import (
@@ -33,6 +36,8 @@ OPERATOR_SCORE = 1.0
 TRAIL_LEN = 90
 
 _UPDATED = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
+# Owner's rule: a detection may lift these to TRACKING; no detection never demotes.
+_LIFTABLE = frozenset({TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +71,9 @@ class _Track:
         self.last_visible = 0
         self.recent = None  # deque of the last quality verdicts
         self.frame_id = -1
+        self.label: str | None = None  # class matched while INITIALIZING; only this class lifts
+        self.detected_ns: int | None = None  # capture_ns of the last frame a detection matched
+        self.correction: Box | None = None  # matched detection, carried to the current frame
         self.trail: deque[tuple[float, float]] = deque(maxlen=TRAIL_LEN)
 
 
@@ -83,6 +91,7 @@ class TrackManager:
         self._lock = threading.Lock()
         self._pending: list[tuple] = []
         self._next_id = 1
+        self._history = TrackHistory()
 
     def select(self, box: Box) -> int:
         with self._lock:
@@ -100,7 +109,8 @@ class TrackManager:
         with self._lock:
             self._pending.append((_Op.REMOVE, track_id))
 
-    def step(self, frame: FramePacket) -> list[TrackSnapshot]:
+    def step(self, frame: FramePacket, detections: Sequence[Observation] = ()) -> list[TrackSnapshot]:
+        """detections: finished since the last step; each carries the frame it saw."""
         with self._lock:
             pending, self._pending = self._pending, []
         for op in pending:
@@ -115,10 +125,33 @@ class TrackManager:
         else:
             observations = [t.prop.update(frame) for t in due]
 
+        self._match(detections)
         for t, obs in zip(due, observations, strict=True):
             self._update(t, frame, obs)
 
+        self._history.record(frame.frame_id, {t.id: t.kf.box for t in self._tracks.values() if t.state in _UPDATED})
         return [self._snapshot(t) for t in self._tracks.values()]
+
+    def _match(self, detections):
+        """Each detection is matched against the track boxes of the frame it saw (SPEC, late results)."""
+        by_frame: dict[int, list[Observation]] = {}
+        for d in detections:
+            by_frame.setdefault(d.frame_id, []).append(d)
+
+        for frame_id, group in by_frame.items():
+            seen = {i: box for i, box in self._history.at(frame_id).items() if i in self._tracks}
+            labels = {i: self._tracks[i].label for i in seen if self._tracks[i].label is not None}
+            for track_id, det in associate(seen, group, self._cfg, labels).items():
+                t = self._tracks[track_id]
+                if t.state is TrackState.INITIALIZING:
+                    t.label = t.label or det.label
+
+                if det.label is None or det.label != t.label:
+                    continue
+
+                t.detected_ns = max(t.detected_ns or det.capture_ns, det.capture_ns)
+                if t.state in _LIFTABLE:
+                    t.correction = carry_forward(det.box, seen[track_id], t.kf.box)
 
     def _apply(self, op, frame):
         kind, track_id, *args = op
@@ -163,6 +196,8 @@ class TrackManager:
         t.quality = TrackQuality(OPERATOR_SCORE, None)
         t.observed = box
         t.recent = deque([True], maxlen=self._cfg.confirm_window)
+        t.detected_ns = None
+        t.label = None
         t.last_visible = frame.capture_ns
         t.frame_id = frame.frame_id
         t.trail.append((box.cx, box.cy))
@@ -178,9 +213,19 @@ class TrackManager:
 
         if q is not None and q >= self._cfg.min_quality:
             t.kf.update(obs.box)
-            t.last_visible = ns
         else:
             t.kf.coast()
+
+        if t.correction is not None:
+            t.kf.update(t.correction)
+            t.correction = None
+
+        # Asymmetric: a detection only raises quality; its absence never lowers it.
+        if self._detected(t, ns):
+            q = max(q or 0.0, self._cfg.good_quality)
+
+        if q is not None and q >= self._cfg.min_quality:
+            t.last_visible = ns
 
         t.recent.append(q is not None and q >= self._cfg.good_quality)
         t.observed = obs.box if obs else None
@@ -189,6 +234,12 @@ class TrackManager:
 
         ev = Evidence(q, ns - t.last_visible, ns - t.state_since, sum(t.recent))
         self._transition(t, next_state(t.state, ev, self._cfg), frame)
+
+    def _detected(self, t, ns):
+        if t.state not in _LIFTABLE or t.detected_ns is None:
+            return False
+
+        return ns - t.detected_ns <= self._cfg.detection_hold_ns
 
     def _transition(self, t, new, frame):
         old = t.state

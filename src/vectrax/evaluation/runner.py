@@ -28,13 +28,13 @@ class FixtureResult:
 
 
 def run_fixture(video: Path | str, propagator_factory: Callable[[], Propagator],
-                cfg: TrackingConfig | None = None) -> FixtureResult:
+                cfg: TrackingConfig | None = None, worker=None) -> FixtureResult:
     video = Path(video)
     frames = json.loads(video.with_suffix(".json").read_text())["frames"]
     gt = load_mot(video.with_suffix("").with_suffix(GT_SUFFIX), frames)
     starts = {gid: min(boxes) for gid, boxes in gt.tracks.items()}
 
-    pipe = build_file_pipeline(video, cfg or TrackingConfig(), propagator_factory=propagator_factory)
+    pipe = build_file_pipeline(video, cfg or TrackingConfig(), propagator_factory=propagator_factory, worker=worker)
     w, h = pipe.frame_size
     pred_of = {}
     preds = {gid: [] for gid in gt.tracks}

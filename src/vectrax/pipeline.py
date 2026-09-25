@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from vectrax.clock import Clock, MonotonicClock
-from vectrax.detection.history import TrackHistory
 from vectrax.events import EventBus
 from vectrax.frames import FramePacket
 from vectrax.metrics import FrameTiming, Metrics, RunMode
@@ -30,8 +29,7 @@ class Tick:
     frame: FramePacket
     tracks: list[TrackSnapshot]
     timing: FrameTiming
-    # Detections that finished by this tick; they saw an earlier frame and do
-    # not touch the tracks yet (fusion is Phase 3 step 5).
+    # Detections fused on this tick; each saw an earlier frame.
     detections: list[Observation] = field(default_factory=list)
 
 
@@ -42,7 +40,6 @@ class Pipeline:
         self._manager = manager
         self._clock = clock
         self._worker = worker
-        self._history = TrackHistory()
         self._ops_lock = threading.Lock()
         self.bus = bus
         self.mode = mode
@@ -95,18 +92,21 @@ class Pipeline:
                 self._recorder.log({"frame": self._recorder.next_index if index is None else index, **op})
 
         tick_ns = self._clock.now_ns()
-        tracks = self._manager.step(frame)
+        detections = self._finished()
+        tracks = self._manager.step(frame, detections)
         timing = FrameTiming(frame.capture_ns, frame.arrival_ns, tick_ns, self._clock.now_ns())
         self.metrics.observe(timing)
-        self._history.record(frame.frame_id, {t.track_id: t.box for t in tracks})
-        return Tick(frame, tracks, timing, self._detections(frame))
+        # After the step: DETERMINISTIC detects inline, and its result is fused
+        # on the next tick, one frame late, like the live path.
+        if self._worker is not None:
+            self._worker.submit(frame)
 
-    def _detections(self, frame: FramePacket) -> list[Observation]:
-        """Hand this frame to the detector and collect whatever has finished."""
+        return Tick(frame, tracks, timing, detections)
+
+    def _finished(self) -> list[Observation]:
         if self._worker is None:
             return []
 
-        self._worker.submit(frame)
         return [o for result in self._worker.results() for o in result.observations]
 
     def rendered(self, tick: Tick) -> None:

@@ -1,6 +1,7 @@
 """Score a propagator on all annotated fixtures (docs/FIXTURES.md).
 
   uv run benchmarks/tracking_eval.py --propagator csrt
+  uv run benchmarks/tracking_eval.py --propagator nano_ncc --detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage
 """
 
 import argparse
@@ -10,7 +11,10 @@ import subprocess
 import time
 from pathlib import Path
 
+from vectrax.detection.coreml import CoreMlDetector
+from vectrax.detection.worker import InferenceWorker
 from vectrax.evaluation.runner import run_fixture
+from vectrax.metrics import RunMode
 from vectrax.tracking.propagators import (
     CsrtPropagator,
     KcfPropagator,
@@ -68,11 +72,13 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--propagator", choices=sorted(PROPAGATORS), default="csrt")
     p.add_argument("--fixtures", default=",".join(NAMES))
+    p.add_argument("--detect", help="Core ML detector package; fused into track state")
     args = p.parse_args()
 
     rows = []
     for name in args.fixtures.split(","):
-        rows.append(_summary(name, run_fixture(FIXTURES / f"{name}.mp4", PROPAGATORS[args.propagator])))
+        worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.DETERMINISTIC) if args.detect else None
+        rows.append(_summary(name, run_fixture(FIXTURES / f"{name}.mp4", PROPAGATORS[args.propagator], worker=worker)))
 
     print(f"\n{'fixture':17s} {'success':>7s} {'onTarget':>8s} {'falseVis':>8s} {'hijack':>6s} {'partial→deg':>11s} "
           f"{'absent→hid':>10s} {'ms p50':>6s}  recoveries (frames)")
@@ -82,9 +88,10 @@ def main():
               f"{r['recoveries']}")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    report = {"propagator": args.propagator, "git_sha": _git("rev-parse", "--short", "HEAD"),
+    report = {"propagator": args.propagator, "detector": args.detect, "git_sha": _git("rev-parse", "--short", "HEAD"),
               "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")), "macos": platform.mac_ver()[0], "fixtures": rows}
-    out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{args.propagator}.json"
+    suffix = "_detect" if args.detect else ""
+    out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{args.propagator}{suffix}.json"
     out.write_text(json.dumps(report, indent=2))
     print(f"\nSaved {out}")
 

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from vectrax.events import EventBus, EventType
 from vectrax.frames import FramePacket, PixelFormat
@@ -206,3 +207,165 @@ def test_jittering_score_still_confirms_within_the_window():
 
     assert S.LOST not in states
     assert S.TRACKING in states
+
+
+
+LABEL = "cup"
+
+
+def _det(frame_id, box, label=LABEL):
+    return Observation(frame_id, frame_id * FRAME_NS, box, 0.8, Origin.DETECTOR, label)
+
+
+def _state(mgr, i, track_id, detections=()):
+    return next(s.state for s in mgr.step(_frame(i), detections) if s.track_id == track_id)
+
+
+HOLD_FRAMES = CFG.detection_hold_ns // FRAME_NS + 1
+CONFIRM = CFG.confirm_frames
+READY = CONFIRM + HOLD_FRAMES  # confirmed, and the evidence from selection has lapsed
+
+
+def _confirm(mgr, seen):
+    """Frames 0..READY-1. The detector reports `seen` while the track initializes, then nothing."""
+    for i in range(READY):
+        mgr.step(_frame(i), [_det(i - 1, box, label) for box, label in seen] if 0 < i < CONFIRM else [])
+
+
+@pytest.mark.parametrize("score, weak", [(0.1, S.OCCLUDED), (0.45, S.DEGRADED)])
+def test_a_detection_lifts_a_weak_track_to_tracking(score, weak):
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else score)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)])
+    assert _state(mgr, READY, tid) is weak
+
+    assert _state(mgr, READY + 1, tid, [_det(READY, BOX)]) is S.TRACKING
+
+
+def test_the_lift_lapses_when_detections_stop():
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else 0.1)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)])
+    _state(mgr, READY, tid, [_det(READY - 1, BOX)])
+
+    states = [_state(mgr, i, tid) for i in range(READY + 1, READY + 1 + HOLD_FRAMES)]
+
+    assert states[0] is S.TRACKING
+    assert states[-1] is S.OCCLUDED
+
+
+def test_no_detection_never_demotes():
+    # A COCO detector cannot see arbitrary targets (R1).
+    mgr, _, _ = _manager()
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)])
+    elsewhere = Box(0.1, 0.1, 0.05, 0.05)
+
+    states = [_state(mgr, i, tid, [_det(i - 1, elsewhere)]) for i in range(READY, READY + HOLD_FRAMES)]
+
+    assert set(states) == {S.TRACKING}
+
+
+class _Moving(FakePropagator):
+    """Reports `path(frame_id)` as its box."""
+
+    def __init__(self, script, path):
+        super().__init__(script)
+        self.path = path
+
+    def update(self, frame):
+        self.box = self.path(frame.frame_id)
+        return super().update(frame)
+
+
+def _moving_manager(script, path):
+    return TrackManager(CFG, lambda: _Moving(script, path), EventBus())
+
+
+def test_a_late_detection_is_matched_where_the_track_was_when_it_was_seen():
+    speed, lag = 0.05, 3  # the track moves a box width in two frames
+
+    def path(i):
+        return Box(0.1 + speed * i, 0.5, 0.1, 0.1)
+
+    mgr = _moving_manager(lambda i: 0.9 if i < READY else 0.45, path)
+    tid = mgr.select(path(0))
+    for i in range(READY):
+        mgr.step(_frame(i), [_det(i - 1, path(i - 1))] if 0 < i < CONFIRM else [])
+
+    _run(mgr, READY, lag)
+    now = READY + lag
+
+    assert _state(mgr, now, tid, [_det(now - lag, path(now - lag))]) is S.TRACKING
+
+
+def test_a_matched_detection_pulls_the_box_onto_the_target():
+    # The propagator loses a moving target and stays put; the detector keeps seeing it.
+    speed, frames = 0.01, 30
+
+    def target(i):
+        return Box(0.3 + speed * i, 0.5, 0.1, 0.1)
+
+    mgr = _moving_manager(lambda i: 0.9 if i < READY else 0.0, lambda i: target(min(i, READY - 1)))
+    tid = mgr.select(target(0))
+    _confirm(mgr, [(target(0), LABEL)])
+
+    for i in range(READY, READY + frames):
+        snap = next(s for s in mgr.step(_frame(i), [_det(i - 1, target(i - 1))] if i % 2 else [])
+                    if s.track_id == tid)
+
+    assert snap.state is S.TRACKING
+    assert abs(snap.box.cx - target(READY + frames - 1).cx) < target(0).w / 2
+
+
+def test_a_detection_does_not_confirm_an_initializing_track():
+    mgr, _, _ = _manager(lambda i: 0.45)
+    tid = mgr.select(BOX)
+    _run(mgr, 0, 1)
+
+    states = [_state(mgr, i, tid, [_det(i - 1, BOX)]) for i in range(1, 5)]
+
+    assert set(states) == {S.INITIALIZING}
+
+
+def test_a_detection_does_not_revive_a_lost_track():
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else None)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)])
+    frames_to_lost = READY + CFG.occlusion_timeout_ns // FRAME_NS + 2
+    _run(mgr, READY, frames_to_lost - READY)
+    assert _state(mgr, frames_to_lost, tid) is S.LOST
+
+    assert _state(mgr, frames_to_lost + 1, tid, [_det(frames_to_lost, BOX)]) is S.LOST
+
+
+def test_only_the_class_seen_at_selection_lifts():
+    # demo_20260920: with the phone gone, a chair behind it lifted the phone's track.
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else 0.1)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, "cell phone")])
+
+    assert _state(mgr, READY, tid, [_det(READY - 1, BOX, "chair")]) is S.OCCLUDED
+    assert _state(mgr, READY + 1, tid, [_det(READY, BOX, "cell phone")]) is S.TRACKING
+
+
+def test_a_target_the_detector_missed_at_selection_is_never_lifted():
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else 0.1)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [])
+
+    assert _state(mgr, READY, tid, [_det(READY - 1, BOX)]) is S.OCCLUDED
+
+
+@pytest.mark.parametrize("right_label, lifted", [("bottle", 0), (LABEL, 1)])
+def test_the_label_weighs_in_when_a_detection_sits_between_two_tracks(right_label, lifted):
+    # The detection overlaps the right track more; a shared label pulls it to the left one.
+    boxes = [Box(0.40, 0.5, 0.2, 0.2), Box(0.52, 0.5, 0.2, 0.2)]
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else 0.45)
+    ids = [mgr.select(b) for b in boxes]
+    _confirm(mgr, [(boxes[0], LABEL), (boxes[1], right_label)])
+
+    between = _det(READY - 1, Box(0.465, 0.5, 0.2, 0.2))
+    snaps = {s.track_id: s.state for s in mgr.step(_frame(READY), [between])}
+
+    assert [snaps[i] for i in ids] == [S.TRACKING if k == lifted else S.DEGRADED for k in range(2)]

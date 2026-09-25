@@ -1,7 +1,7 @@
 import pytest
 
-from vectrax.detection.history import TrackHistory, carry_forward
 from vectrax.tracking.geometry import Box
+from vectrax.tracking.history import TrackHistory, carry_forward
 
 BOX = Box(0.5, 0.5, 0.2, 0.2)
 

@@ -37,6 +37,9 @@ class TrackingConfig:
     # that already pass the IoU gate (R1: the detector's class is a hint).
     assoc_min_iou: float = 0.3
     assoc_label_weight: float = 1.2
+    # A matched detection counts as "visible" for this long after the frame it
+    # saw; it bridges the frames between detections (stride 2 plus latency).
+    detection_hold_ns: int = 2 * NS_PER_S // 10
 
     def __post_init__(self):
         if not 0 <= self.min_quality < self.good_quality <= 1:
@@ -52,7 +55,7 @@ class TrackingConfig:
         if not 0 < self.confirm_frames <= self.confirm_window:
             raise ValueError("need 0 < confirm_frames <= confirm_window")
 
-        if self.init_timeout_ns <= 0 or self.occlusion_timeout_ns <= 0 or self.coast_tau_ns <= 0:
+        if min(self.init_timeout_ns, self.occlusion_timeout_ns, self.coast_tau_ns, self.detection_hold_ns) <= 0:
             raise ValueError("timeouts must be > 0")
 
         for name in ("meas_std", "acc_std", "size_acc_std", "init_vel_std", "motion_gate"):

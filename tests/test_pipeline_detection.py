@@ -57,19 +57,21 @@ def _run(tmp_path, stride):
     return detector, ticks
 
 
-def test_tick_carries_the_detections(tmp_path):
+def test_a_tick_fuses_the_detections_of_the_frame_before(tmp_path):
+    # DETERMINISTIC detects after the step, so it lags one frame like REALTIME.
     _, ticks = _run(tmp_path, stride=1)
 
-    assert all(len(t.detections) == 1 for t in ticks)
+    assert ticks[0].detections == []
+    assert all(len(t.detections) == 1 for t in ticks[1:])
     assert ticks[3].detections[0].origin is Origin.DETECTOR
-    assert ticks[3].detections[0].frame_id == 3
+    assert ticks[3].detections[0].frame_id == 2
 
 
 def test_stride_leaves_the_frames_in_between_without_detections(tmp_path):
     detector, ticks = _run(tmp_path, stride=3)
 
     assert detector.seen == [0, 3, 6, 9]
-    assert [t.frame.frame_id for t in ticks if t.detections] == [0, 3, 6, 9]
+    assert [t.frame.frame_id for t in ticks if t.detections] == [1, 4, 7, 10]
 
 
 def test_pipeline_without_a_worker_reports_no_detections(tmp_path):

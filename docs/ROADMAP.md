@@ -115,12 +115,22 @@ Steps, one commit each, test first:
 - [x] 4. Associator: mutual-best IoU, class hint as weight only (R1).
       Two nearby targets must not swap (the 2b hijack case). Ties match
       nothing. Not wired in yet; step 5 feeds it `TrackHistory.at()`.
-- [ ] 5. Quality fusion, asymmetric: a detection overlapping the track may
+- [x] 5. Quality fusion, asymmetric: a detection overlapping the track may
       lift DEGRADED/OCCLUDED to TRACKING; no detection never demotes a
       track — a COCO detector cannot see arbitrary targets (the paper in
       data/sessions/demo_20260920 was never detected). TrackManager keeps
       sole authority over transitions. Regression: the phone in that
       session must not read OCCLUDED while it is visible.
+      Owner's calls (2026-09-25), from that session's replay: only the class
+      matched while INITIALIZING lifts (unrestricted, a chair behind the
+      gone phone lifted it for 49 frames); the matched detection also
+      corrects the Kalman box (without it the box slid off the phone and
+      the match was lost). Phone track, frames read OCCLUDED/LOST while a
+      phone was detected: 557 without fusion, 5 with; frames lifted with
+      no phone detected: 15, all 2-4 frames after the last one (0.2 s
+      hold). Paper and pupil tracks (demo_detect, demo_fixed) unchanged:
+      the detector never matched them at selection. Detections are now
+      fused one tick late in DETERMINISTIC too, like REALTIME.
 - [ ] 6. 1–3 targets: R3a/R3b measured with detection on → PERFORMANCE.md,
       ADR-010 (detection scheduling and fusion).
 

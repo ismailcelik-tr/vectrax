@@ -183,7 +183,7 @@ def main(argv=None):
     p.add_argument("--record", nargs="?", const="", help=f"record session to {SESSIONS_DIR}/NAME")
     p.add_argument("--metrics-out", help="write latency summary JSON here")
     p.add_argument("--scale", type=float, default=1.0, help="propagator downscale (0,1]")
-    p.add_argument("--detect", help="Core ML detector package; detections are shown, not fused yet")
+    p.add_argument("--detect", help="Core ML detector package; detections lift track state")
     p.add_argument("--detect-stride", type=int, default=STRIDE, help="detect every Nth frame")
     args = p.parse_args(argv)
 

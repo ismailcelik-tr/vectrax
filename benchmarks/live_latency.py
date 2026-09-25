@@ -122,7 +122,8 @@ def main():
     stamp = time.strftime("%Y%m%d-%H%M%S")
     suffix = "_detect" if args.detect else ""
     rows = []
-    for n in (int(v) for v in args.targets.split(",")):
+    counts = [int(v) for v in args.targets.split(",")]
+    for i, n in enumerate(counts):
         probe = None
         if args.detect:
             worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.REALTIME, stride=args.detect_stride)
@@ -137,7 +138,9 @@ def main():
         if probe is not None:
             report["detection"] = {"detector": args.detect, "stride": args.detect_stride, **probe.summary()}
 
-        (OUT_DIR / f"{stamp}_{n}targets{suffix}.json").write_text(json.dumps(report, indent=2))
+        # Repeated counts (--targets 1,1) would overwrite each other.
+        run = f"_run{i + 1}" if counts.count(n) > 1 else ""
+        (OUT_DIR / f"{stamp}_{n}targets{suffix}{run}.json").write_text(json.dumps(report, indent=2))
         rows.append(report)
 
     print(f"\n{'targets':>7} {'tracked p50/p95':>16} {'R3a':>4} {'render p50/p95':>15} {'R3b':>4} {'dropped':>8}"

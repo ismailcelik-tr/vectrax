@@ -33,6 +33,11 @@ class TrackingConfig:
     # While coasting (no visible observation), velocity decays with this time constant.
     coast_tau_ns: int = 3 * NS_PER_S // 10
 
+    # Detection ↔ track association. The label weight only ranks candidates
+    # that already pass the IoU gate (R1: the detector's class is a hint).
+    assoc_min_iou: float = 0.3
+    assoc_label_weight: float = 1.2
+
     def __post_init__(self):
         if not 0 <= self.min_quality < self.good_quality <= 1:
             raise ValueError("need 0 <= min_quality < good_quality <= 1")
@@ -53,3 +58,9 @@ class TrackingConfig:
         for name in ("meas_std", "acc_std", "size_acc_std", "init_vel_std", "motion_gate"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be > 0")
+
+        if not 0 < self.assoc_min_iou <= 1:
+            raise ValueError("need 0 < assoc_min_iou <= 1")
+
+        if self.assoc_label_weight < 1:
+            raise ValueError("assoc_label_weight must be >= 1")

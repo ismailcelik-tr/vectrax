@@ -112,8 +112,9 @@ Steps, one commit each, test first:
       stride N. A slow detector must not slow the tick or build a queue.
 - [x] 3. Late-result fusion (time alignment; the fuse itself is step 5): results carry the frame they saw; the
       correction is matched there and carried forward to the current frame.
-- [ ] 4. Associator: mutual-best IoU, class hint as weight only (R1).
-      Two nearby targets must not swap (the 2b hijack case).
+- [x] 4. Associator: mutual-best IoU, class hint as weight only (R1).
+      Two nearby targets must not swap (the 2b hijack case). Ties match
+      nothing. Not wired in yet; step 5 feeds it `TrackHistory.at()`.
 - [ ] 5. Quality fusion, asymmetric: a detection overlapping the track may
       lift DEGRADED/OCCLUDED to TRACKING; no detection never demotes a
       track — a COCO detector cannot see arbitrary targets (the paper in

@@ -17,6 +17,9 @@ def test_defaults_are_valid():
     {"occlusion_timeout_ns": 0},
     {"init_timeout_ns": -1},
     {"meas_std": 0},
+    {"assoc_min_iou": 0},
+    {"assoc_min_iou": 1.1},
+    {"assoc_label_weight": 0.9},
 ])
 def test_invalid_config_rejected(kwargs):
     with pytest.raises(ValueError):

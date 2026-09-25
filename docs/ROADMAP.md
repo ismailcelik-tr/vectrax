@@ -98,7 +98,7 @@ reacquisition goes through appearance (Phase 4). SAM 2 is not a runtime
 candidate (~1.1 s/frame on MPS), so SAM 2 pre-labels do not bias results;
 SAM-family candidates would be scored on owner-labelled fixtures only.
 
-## Phase 3 — detector in the loop (approved 2026-09-20)
+## Phase 3 — detector in the loop (approved 2026-09-20, closed 2026-09-25)
 
 Owner's calls: detection every N frames, invisible to the eye (start N=2,
 15 Hz); Core ML fp16 on the GPU (ADR-009 default, power is not the priority
@@ -139,6 +139,23 @@ Steps, one commit each, test first:
 
 Acceptance: tests green, ruff clean; deterministic replay reproduces runs;
 R3a p95 ≤ 100 ms with detection on; owner verifies on camera.
+
+### Owner verification (2026-09-25, data/sessions/phase3_verify{,2})
+Live with detection on, replayed headless; ids reproduced. Owner: smooth.
+| Session | Targets | R3a / R3b p95 ms | Finding |
+|---|---|---|---|
+| phase3_verify | phone, 2 pupils, wrist, collar | 56.9 / 87.6 | Phone TRACKING f264 to end, 12 frames OCCLUDED in 1-3 frame blips. Non-COCO wrist and collar held, never lifted. Both pupils merged (935 of 1503 frames at IoU ≥ 0.5) after drifting to the ceiling edge while DEGRADED/OCCLUDED. |
+| phase3_verify2 | phone, mug | 57.0 / 87.1 | Phone left the frame f284-287 → OCCLUDED f288; nothing lifted it while gone (a person detection was in view). Six crossings, mug in front 4×, phone 2×: the hidden one read OCCLUDED, both back on their own object after each. No swap (sampled frames, no GT). |
+
+Acceptance met: tests green, ruff clean, replay reproduces, R3a p95 ≤ 100 ms
+with detection on, owner verified on camera.
+
+Open, for Phase 4 reacquisition: in phase3_verify2 the phone was gone ~3 s;
+its OCCLUDED box sat off-frame (x≈1458 px) and at f372 jumped ~930 px onto
+the returning phone, then a detection lifted it (f377). Right object, but
+an unplanned re-find: the same class elsewhere could take it. Cause not
+examined; a gate widened by long coasting is the hypothesis. The occlusion
+lasted 88 frames, just under the 3 s timeout.
 
 ### Found while demoing (2026-09-20, data/sessions/demo_detect)
 - NanoTrack's box oscillates on a 3-frame rhythm even on a still scene: run

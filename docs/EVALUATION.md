@@ -230,3 +230,29 @@ Reading:
   IDSW 0.
 - HOTA sits below success everywhere because it also scores box fit at IoU
   above 0.5: single_target is 100 % success, 71 % HOTA.
+
+## One target at a time (Phase 4, 2026-09-27, git 0cf7cff)
+
+Command: `uv run benchmarks/tracking_eval.py --propagator nano_ncc
+--fixtures crossing_targets,near_targets --one-at-a-time [--detect
+models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage]`. Raw:
+`benchmarks/results/tracking/20260927-145333_nano_ncc_one.json` (off),
+`20260927-145404_nano_ncc_detect_one.json` (on). Clean tree. Only the named
+cup is selected; the other is a look-alike nobody tracks.
+
+| Selected | success off | success on | hijack off | hijack on |
+|---|---|---|---|---|
+| crossing_targets#1 | 47 | 95 | 0 | 3 |
+| crossing_targets#2 | 11 | 15 | 0 | **471** |
+| near_targets#1 | 97 | 99 | 0 | 0 |
+| near_targets#2 | 4 | 100 | 0 | 0 |
+
+Reading:
+- A lone track swaps to the look-alike when detection is on: cup 2's track
+  sits on cup 1 for 471 frames. A cup detection that overlaps the track
+  lifts it and corrects its box onto the other cup (Phase 3 fusion). With
+  both cups selected, mutual-best association gives each detection to its
+  own track, so the Phase 3 table never showed this.
+- Detection still carries lone tracks: near_targets#2 goes from 4 to 100 %.
+  A lift needs an identity check, not removal.
+

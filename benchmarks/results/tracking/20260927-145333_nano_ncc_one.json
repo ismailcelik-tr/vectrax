@@ -1,0 +1,180 @@
+{
+  "propagator": "nano_ncc",
+  "detector": null,
+  "one_at_a_time": true,
+  "git_sha": "0cf7cff",
+  "git_dirty": false,
+  "macos": "27.0",
+  "fixtures": [
+    {
+      "fixture": "crossing_targets#1",
+      "success": 0.4683333333333333,
+      "on_target": 0.525,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 23,
+      "wrong_relocks": 16,
+      "wrong_relock_frames": [
+        [
+          216,
+          "other"
+        ],
+        [
+          227,
+          "other"
+        ],
+        [
+          377,
+          "background"
+        ],
+        [
+          476,
+          "background"
+        ],
+        [
+          478,
+          "background"
+        ],
+        [
+          483,
+          "background"
+        ],
+        [
+          519,
+          "background"
+        ],
+        [
+          523,
+          "other"
+        ],
+        [
+          525,
+          "other"
+        ],
+        [
+          527,
+          "other"
+        ],
+        [
+          529,
+          "other"
+        ],
+        [
+          531,
+          "other"
+        ],
+        [
+          533,
+          "other"
+        ],
+        [
+          537,
+          "background"
+        ],
+        [
+          540,
+          "background"
+        ],
+        [
+          542,
+          "background"
+        ]
+      ],
+      "idsw": 0,
+      "idf1": 0.5509803921568628,
+      "hota": 0.2995766486438168,
+      "recoveries": [],
+      "partial_as_degraded": 0.18181818181818182,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.41,
+      "states": {
+        "partial->degraded": 2,
+        "partial->occluded": 7,
+        "partial->tracking": 2,
+        "visible->degraded": 152,
+        "visible->initializing": 2,
+        "visible->occluded": 173,
+        "visible->tracking": 262
+      }
+    },
+    {
+      "fixture": "crossing_targets#2",
+      "success": 0.1135593220338983,
+      "on_target": 0.1135593220338983,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 2,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.2039573820395738,
+      "hota": 0.09269612444694751,
+      "recoveries": [
+        null
+      ],
+      "partial_as_degraded": 0.023076923076923078,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 0.023,
+      "states": {
+        "absent->lost": 10,
+        "partial->degraded": 3,
+        "partial->lost": 60,
+        "partial->occluded": 66,
+        "partial->tracking": 1,
+        "visible->degraded": 7,
+        "visible->initializing": 2,
+        "visible->lost": 357,
+        "visible->occluded": 40,
+        "visible->tracking": 54
+      }
+    },
+    {
+      "fixture": "near_targets#1",
+      "success": 0.97,
+      "on_target": 0.9716666666666667,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 2,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.9814502529510961,
+      "hota": 0.7405748063610565,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 2.908,
+      "states": {
+        "visible->degraded": 35,
+        "visible->initializing": 2,
+        "visible->occluded": 14,
+        "visible->tracking": 549
+      }
+    },
+    {
+      "fixture": "near_targets#2",
+      "success": 0.04,
+      "on_target": 0.04,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 0,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.07692307692307693,
+      "hota": 0.03505169477918033,
+      "recoveries": [],
+      "partial_as_degraded": 0.0,
+      "absent_as_hidden": null,
+      "track_ms_p50": 0.011,
+      "states": {
+        "partial->initializing": 2,
+        "partial->tracking": 8,
+        "visible->degraded": 2,
+        "visible->lost": 487,
+        "visible->occluded": 89,
+        "visible->tracking": 12
+      }
+    }
+  ]
+}

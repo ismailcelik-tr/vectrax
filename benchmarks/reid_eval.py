@@ -239,7 +239,8 @@ def main():
               "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
               "macos": platform.mac_ver()[0], "detector": args.detect, "fixtures": args.fixtures.split(","),
               "counts": {lb: sum(c["label"] == lb for c in cands) for lb in LABELS},
-              "proposal_recall": None, "scorers": {}}
+              "proposal_recall": None, "scorers": {},
+              "candidates": [{k: c[k] for k in ("fixture", "gid", "frame", "origin", "label")} for c in cands]}
     seen = [f for f in frames if f["visible"]]
     report["proposal_recall"] = sum(f["proposed"] for f in seen) / len(seen) if seen else None
 
@@ -254,8 +255,7 @@ def main():
         rest = by["other"] + by["bg"] + by["absent"]
         row = {"auc": _auc(by["own"], rest), "auc_bg": _auc(by["own"], by["bg"]),
                "auc_absent": _auc(by["own"], by["absent"]), "auc_other": _auc(by["own"], by["other"]),
-               "clean_recall": _recall_clean(by["own"], rest),
-               "scores": {lb: [round(v, 4) for v in by[lb]] for lb in LABELS}}
+               "clean_recall": _recall_clean(by["own"], rest), "scores": [round(v, 4) for v in vals]}
         report["scorers"][key] = row
         print(f"{key:16s} {_fmt(row['auc']):>5s} {_fmt(row['auc_bg']):>6s} {_fmt(row['auc_absent']):>9s} "
               f"{_fmt(row['auc_other']):>8s} {_fmt(row['clean_recall']):>12s}")

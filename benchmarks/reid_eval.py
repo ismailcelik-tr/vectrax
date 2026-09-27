@@ -129,6 +129,7 @@ def _collect(name, cfg, detect):
 
                     labels.append(_label(c.box, gid, gt, f, w, h))
                     cands.append({"fixture": name, "gid": gid, "frame": f, "origin": c.origin.value,
+                                  "box": [round(v, 4) for v in (c.box.cx, c.box.cy, c.box.w, c.box.h)],
                                   "label": labels[-1], "crop": crop, "refs": len(refs[gid])})
 
                 frames.append({"visible": f in gt.tracks[gid], "proposed": "own" in labels})
@@ -240,7 +241,7 @@ def main():
               "macos": platform.mac_ver()[0], "detector": args.detect, "fixtures": args.fixtures.split(","),
               "counts": {lb: sum(c["label"] == lb for c in cands) for lb in LABELS},
               "proposal_recall": None, "scorers": {},
-              "candidates": [{k: c[k] for k in ("fixture", "gid", "frame", "origin", "label")} for c in cands]}
+              "candidates": [{k: c[k] for k in ("fixture", "gid", "frame", "origin", "box", "label")} for c in cands]}
     seen = [f for f in frames if f["visible"]]
     report["proposal_recall"] = sum(f["proposed"] for f in seen) / len(seen) if seen else None
 

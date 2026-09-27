@@ -40,6 +40,10 @@ class TrackingConfig:
     # A matched detection counts as "visible" for this long after the frame it
     # saw; it bridges the frames between detections (stride 2 plus latency).
     detection_hold_ns: int = 2 * NS_PER_S // 10
+    # Two visible tracks whose centers lie in each other's box this long sit on
+    # one object; the weaker yields. Distinct fixture objects never overlapped
+    # past IoU 0.17 while both visible; merged pupils held 0.5-0.89 for seconds.
+    same_object_ns: int = NS_PER_S // 2
 
     def __post_init__(self):
         if not 0 <= self.min_quality < self.good_quality <= 1:
@@ -55,7 +59,8 @@ class TrackingConfig:
         if not 0 < self.confirm_frames <= self.confirm_window:
             raise ValueError("need 0 < confirm_frames <= confirm_window")
 
-        if min(self.init_timeout_ns, self.occlusion_timeout_ns, self.coast_tau_ns, self.detection_hold_ns) <= 0:
+        if min(self.init_timeout_ns, self.occlusion_timeout_ns, self.coast_tau_ns, self.detection_hold_ns,
+               self.same_object_ns) <= 0:
             raise ValueError("timeouts must be > 0")
 
         for name in ("meas_std", "acc_std", "size_acc_std", "init_vel_std", "motion_gate"):

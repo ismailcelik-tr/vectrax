@@ -369,3 +369,53 @@ def test_the_label_weighs_in_when_a_detection_sits_between_two_tracks(right_labe
     snaps = {s.track_id: s.state for s in mgr.step(_frame(READY), [between])}
 
     assert [snaps[i] for i in ids] == [S.TRACKING if k == lifted else S.DEGRADED for k in range(2)]
+
+
+SAME = CFG.same_object_ns // FRAME_NS + 1
+BESIDE = Box(0.6, 0.5, 0.1, 0.1)
+VISIBLE = {S.TRACKING, S.DEGRADED}
+
+
+def _two_on(paths, scores):
+    """Track i reports paths[i](frame) with score scores[i](frame)."""
+    made = iter(zip(scores, paths, strict=True))
+    mgr = TrackManager(CFG, lambda: _Moving(*next(made)), EventBus())
+    return mgr, [mgr.select(path(0)) for path in paths]
+
+
+def test_two_tracks_on_one_object_the_weaker_yields():
+    # demo_detect, phase3_verify: both pupil tracks ended up on one pupil.
+    mgr, (a, b) = _two_on([lambda i: BOX] * 2, [lambda i: 0.9, lambda i: 0.8])
+
+    snaps = _run(mgr, 0, CONFIRM + SAME)
+    later = [_state(mgr, i, b) for i in range(CONFIRM + SAME, CONFIRM + SAME + 10)]
+
+    assert snaps[a].state is S.TRACKING
+    assert snaps[b].state is S.OCCLUDED
+    assert not VISIBLE & set(later)
+
+
+def test_a_brief_overlap_keeps_both():
+    mgr, ids = _two_on([lambda i: BOX] * 2, [lambda i: 0.9, lambda i: 0.8])
+
+    snaps = _run(mgr, 0, CONFIRM + SAME - 2)
+
+    assert {snaps[i].state for i in ids} == {S.TRACKING}
+
+
+def test_on_a_tie_the_newer_track_yields():
+    mgr, (a, b) = _two_on([lambda i: BOX] * 2, [lambda i: 0.9] * 2)
+
+    snaps = _run(mgr, 0, CONFIRM + SAME)
+
+    assert (snaps[a].state, snaps[b].state) == (S.TRACKING, S.OCCLUDED)
+
+
+def test_a_yielded_track_returns_on_its_own_object():
+    left = CONFIRM + SAME + 2
+    mgr, (_, b) = _two_on([lambda i: BOX, lambda i: BOX if i < left else BESIDE], [lambda i: 0.9, lambda i: 0.8])
+    _run(mgr, 0, left)
+
+    states = [_state(mgr, i, b) for i in range(left, left + 5)]
+
+    assert VISIBLE & set(states)

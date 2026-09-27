@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass
 from enum import Enum, auto
+from itertools import combinations
 
 from vectrax.events import Event, EventBus, EventType
 from vectrax.frames import FramePacket
@@ -38,6 +39,7 @@ TRAIL_LEN = 90
 _UPDATED = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
 # Owner's rule: a detection may lift these to TRACKING; no detection never demotes.
 _LIFTABLE = frozenset({TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
+_VISIBLE = frozenset({TrackState.TRACKING, TrackState.DEGRADED})
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +76,7 @@ class _Track:
         self.label: str | None = None  # class matched while INITIALIZING; only this class lifts
         self.detected_ns: int | None = None  # capture_ns of the last frame a detection matched
         self.correction: Box | None = None  # matched detection, carried to the current frame
+        self.yields_to: int | None = None  # track that keeps the object both sat on
         self.trail: deque[tuple[float, float]] = deque(maxlen=TRAIL_LEN)
 
 
@@ -92,6 +95,7 @@ class TrackManager:
         self._pending: list[tuple] = []
         self._next_id = 1
         self._history = TrackHistory()
+        self._shared_since: dict[tuple[int, int], int] = {}  # visible pair on one box → since ns
 
     def select(self, box: Box) -> int:
         with self._lock:
@@ -129,6 +133,7 @@ class TrackManager:
         for t, obs in zip(due, observations, strict=True):
             self._update(t, frame, obs)
 
+        self._dedupe(frame)
         self._history.record(frame.frame_id, {t.id: t.kf.box for t in self._tracks.values() if t.state in _UPDATED})
         return [self._snapshot(t) for t in self._tracks.values()]
 
@@ -207,6 +212,15 @@ class TrackManager:
 
     def _update(self, t, frame, obs):
         ns = frame.capture_ns
+        if t.yields_to is not None:
+            keeper = self._tracks.get(t.yields_to)
+            if keeper is None or keeper.state not in _UPDATED:
+                t.yields_to = None
+            elif obs is not None and _same_box(obs.box, keeper.kf.box):
+                obs = None
+            elif obs is not None:
+                t.yields_to = None
+
         residual = t.kf.residual(obs.box) if obs else None
         t.quality = TrackQuality(obs.score if obs else None, residual)
         q = t.quality.combined(self._cfg)
@@ -234,6 +248,26 @@ class TrackManager:
 
         ev = Evidence(q, ns - t.last_visible, ns - t.state_since, sum(t.recent))
         self._transition(t, next_state(t.state, ev, self._cfg), frame)
+
+    def _dedupe(self, frame):
+        """One object, one track: a visible pair on one box for same_object_ns keeps the better one."""
+        ns = frame.capture_ns
+        shown = [t for t in self._tracks.values() if t.state in _VISIBLE]
+        shared = {}
+        for a, b in combinations(shown, 2):
+            if a.state not in _VISIBLE or b.state not in _VISIBLE or not _same_box(a.kf.box, b.kf.box):
+                continue
+
+            shared[a.id, b.id] = since = self._shared_since.get((a.id, b.id), ns)
+            if ns - since < self._cfg.same_object_ns:
+                continue
+
+            # Lower quality yields; on a tie the newer track does.
+            loser, keeper = sorted((a, b), key=lambda t: (t.quality.combined(self._cfg) or 0.0, -t.id))
+            loser.yields_to = keeper.id
+            self._transition(loser, TrackState.OCCLUDED, frame)
+
+        self._shared_since = shared
 
     def _detected(self, t, ns):
         if t.state not in _LIFTABLE or t.detected_ns is None:
@@ -265,3 +299,12 @@ class TrackManager:
             capture_ns=t.kf.t_ns,
             trail=tuple(t.trail),
         )
+
+
+def _same_box(a: Box, b: Box) -> bool:
+    """Each center lies inside the other box."""
+    return _center_inside(a, b) and _center_inside(b, a)
+
+
+def _center_inside(box: Box, region: Box) -> bool:
+    return abs(box.cx - region.cx) <= region.w / 2 and abs(box.cy - region.cy) <= region.h / 2

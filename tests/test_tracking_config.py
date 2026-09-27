@@ -21,6 +21,7 @@ def test_defaults_are_valid():
     {"assoc_min_iou": 1.1},
     {"assoc_label_weight": 0.9},
     {"detection_hold_ns": 0},
+    {"same_object_ns": 0},
 ])
 def test_invalid_config_rejected(kwargs):
     with pytest.raises(ValueError):

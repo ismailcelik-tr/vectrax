@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from vectrax.clock import VirtualClock
-from vectrax.detection.worker import InferenceWorker
+from vectrax.detection.worker import EmbedRequest, InferenceWorker
 from vectrax.frames import FramePacket, PixelFormat
 from vectrax.metrics import RunMode
 from vectrax.tracking.geometry import Box
@@ -147,3 +147,78 @@ def test_deterministic_mode_raises_instead_of_hiding_the_failure():
 
     with pytest.raises(RuntimeError):
         worker.submit(_frame(0))
+
+
+class FakeEmbedder:
+    """Embeds a box as (frame id, box center x)."""
+
+    def __init__(self):
+        self.loaded = False
+        self.calls = []
+
+    def load(self):
+        self.loaded = True
+
+    def embed(self, frame, boxes):
+        self.calls.append((frame.frame_id, len(boxes)))
+        return [np.array([frame.frame_id, b.cx]) for b in boxes]
+
+
+class TwoLabels(FakeDetector):
+    def detect(self, frame):
+        cup = super().detect(frame)[0]
+        return [cup, Observation(frame.frame_id, frame.capture_ns, Box(0.2, 0.5, 0.1, 0.1), 0.9, Origin.DETECTOR, "person")]
+
+
+def _embedding_worker(detector=None, stride=1):
+    embedder = FakeEmbedder()
+    worker = InferenceWorker(detector or FakeDetector(), RunMode.DETERMINISTIC, clock=VirtualClock(), stride=stride,
+                             embedder=embedder)
+    worker.start()
+    return worker, embedder
+
+
+def test_requested_boxes_come_back_embedded_under_their_keys():
+    worker, embedder = _embedding_worker()
+
+    worker.submit(_frame(4), [EmbedRequest("a", Box(0.3, 0.5, 0.1, 0.1)), EmbedRequest("b", Box(0.7, 0.5, 0.1, 0.1))])
+    (result,) = worker.results()
+
+    assert embedder.loaded
+    assert {k: tuple(v) for k, v in result.embeddings.items()} == {"a": (4, 0.3), "b": (4, 0.7)}
+
+
+def test_only_watched_labels_are_embedded():
+    worker, embedder = _embedding_worker(TwoLabels())
+
+    worker.submit(_frame(2), labels=frozenset({"cup"}))
+    (result,) = worker.results()
+
+    embedded = {o.label: o.embedding is not None for o in result.observations}
+    assert embedded == {"cup": True, "person": False}
+    assert embedder.calls == [(2, 1)]
+
+
+def test_requests_off_the_stride_are_embedded_without_detection():
+    detector = FakeDetector()
+    worker, _ = _embedding_worker(detector, stride=2)
+
+    worker.submit(_frame(1), [EmbedRequest("a", Box(0.5, 0.5, 0.1, 0.1))])
+    (result,) = worker.results()
+
+    assert detector.seen == []
+    assert result.observations == []
+    assert set(result.embeddings) == {"a"}
+
+
+def test_realtime_returns_embeddings_too():
+    worker = InferenceWorker(FakeDetector(), RunMode.REALTIME, clock=VirtualClock(), stride=1, embedder=FakeEmbedder())
+    worker.start()
+    try:
+        worker.submit(_frame(0), [EmbedRequest("a", Box(0.5, 0.5, 0.1, 0.1))])
+        results = []
+        assert _wait_for(lambda: results.extend(worker.results()) or results)
+    finally:
+        worker.stop()
+
+    assert set(results[0].embeddings) == {"a"}

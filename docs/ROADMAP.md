@@ -226,6 +226,15 @@ Steps, one commit each, test first:
       observations near the prediction; a far one is a candidate; one
       threshold for the Kalman update and for leaving OCCLUDED. Regressions:
       phase3_verify2 f372 (no jump), non_coco and fast_motion relocks kept.
+      On branch phase4-reacquire, not merged. The state alone (REACQUIRING
+      still taking evidence, LOST at 6 s) let crossing_targets' track take
+      the other cup: hijack 3 → 187 frames. Scoring candidates by gray NCC
+      against the selection does not separate target from background: over
+      2011 logged candidates, search peaks score median 0.67 on the target
+      and 0.66 on background (700 of 737 background peaks ≥ 0.6); occlusion
+      gained 232 false-visible frames, non_coco fell 47 → 9 %.
+      Owner's call (2026-09-27): steps 4 and 5 go first, offline on the
+      logged candidates, to pick the scorer; step 3 finishes with it.
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.

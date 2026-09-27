@@ -9,7 +9,8 @@ scorer compares a candidate with the look at selection, and with a gallery: the 
 earlier TRACKING frames at good quality. Reports ROC AUC (own vs the rest) and own recall at the
 strictest threshold no other candidate reaches. Candidates come from the NCC search and the
 propagator, so a scorer can only re-rank them; proposal recall says how often the target was
-among them at all.
+among them at all. --one-at-a-time runs multi-target fixtures once per target with only that one
+selected, so the others are untracked look-alikes rather than objects a track holds.
 """
 
 import argparse
@@ -86,16 +87,16 @@ def _label(box: Box, gid, gt, f, w, h):
     return "absent" if own is None else "bg"
 
 
-def _collect(name, cfg, detect):
+def _collect(name, cfg, detect, only=None):
     video = FIXTURES / f"{name}.mp4"
     gt = load_mot(video.with_suffix("").with_suffix(".gt.zip"), json.loads(video.with_suffix(".json").read_text())["frames"])
-    starts = {gid: min(boxes) for gid, boxes in gt.tracks.items()}
+    starts = {gid: min(boxes) for gid, boxes in gt.tracks.items() if only in (None, gid)}
     worker = InferenceWorker(CoreMlDetector(detect), RunMode.DETERMINISTIC) if detect else None
     pipe = build_file_pipeline(video, cfg, propagator_factory=lambda: NanoPropagator(score=ScoreSource.NCC),
                                worker=worker)
     w, h = pipe.frame_size
     track_of, good = {}, defaultdict(int)
-    refs = {gid: [] for gid in gt.tracks}  # crops, selection first
+    refs = {gid: [] for gid in starts}  # crops, selection first
     cands, frames = [], []
     try:
         while (frame := pipe.read()) is not None:
@@ -240,16 +241,25 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--fixtures", default=",".join(NAMES))
     p.add_argument("--detect", help="Core ML detector package, as in the live pipeline")
+    p.add_argument("--one-at-a-time", action="store_true", help="select one target per run")
     args = p.parse_args()
 
     # Watch candidates, never act on them: no candidate leads anything by an infinite margin.
     cfg = replace(TrackingConfig(), reacquire_margin=math.inf)
     refs, cands, frames = {}, [], []
+    detect = Path(args.detect) if args.detect else None
     for name in args.fixtures.split(","):
-        r, c, f = _collect(name, cfg, Path(args.detect) if args.detect else None)
-        refs.update({(name, gid): crops for gid, crops in r.items()})
-        cands += c
-        frames += f
+        runs = [None]
+        if args.one_at_a_time:
+            video = FIXTURES / f"{name}.mp4"
+            runs = sorted(load_mot(video.with_suffix("").with_suffix(".gt.zip"), 0).tracks)
+
+        for only in runs:
+            label = name if only is None or len(runs) == 1 else f"{name}#{only}"
+            r, c, f = _collect(name, cfg, detect, only)
+            refs.update({(label, gid): crops for gid, crops in r.items()})
+            cands += [{**x, "fixture": label} for x in c]
+            frames += [{**x, "fixture": label} for x in f]
 
     order = [(k, i) for k, crops in refs.items() for i in range(len(crops))]
     ref_crops = [refs[k][i] for k, i in order]
@@ -276,6 +286,7 @@ def main():
     report = {"git_sha": _git("rev-parse", "--short", "HEAD"),
               "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
               "macos": platform.mac_ver()[0], "detector": args.detect, "fixtures": args.fixtures.split(","),
+              "one_at_a_time": args.one_at_a_time,
               "counts": {lb: sum(c["label"] == lb for c in cands) for lb in LABELS},
               "proposal_recall": None, "scorers": {},
               "candidates": [{k: c[k] for k in ("fixture", "gid", "frame", "origin", "box", "label")} for c in cands]}

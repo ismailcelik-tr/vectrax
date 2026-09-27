@@ -191,16 +191,31 @@ Steps, one commit each, test first:
       background) and TrackEval IDSW/IDF1/HOTA; baseline of the current
       system. With detection: 12 wrong relocks, all on background
       (fast_motion 10, non_coco 2); IDSW 1 (crossing_targets). EVALUATION.md.
-- [ ] 1. No unplanned re-find: OCCLUDED must not accept a far propagator
-      observation. Regression: phase3_verify2 f372 (~930 px jump). Cause
-      confirmed on replay before the test.
+- [x] 1. No unplanned re-find: folded into step 3 (owner, 2026-09-27).
+      Replay of phase3_verify2 f372: coasting grew the position variance
+      from 1e-4 to 5.3 (normalized), so a box 866 px away passed the motion
+      gate (residual 0.3); the Kalman updated at q 0.32 (≥ min_quality)
+      while OCCLUDED needs 0.4 to leave. The box landed on the propagator's
+      stale box (~630,490 since f320), not on the phone; a detection moved
+      it onto the phone at f376. The propagator had been left behind since
+      f275: detections corrected the Kalman, the propagator was never
+      re-initialized. Two gates tried, both reverted: "observation center
+      inside the prediction" (non_coco success 47→9 %, fast_motion 19→12 %)
+      and "no observation while the prediction is off-frame" (fast_motion
+      19→12 %). On those fixtures the Kalman is wrong (stops, or overshoots
+      off-frame) and the propagator right (fast_motion scores 0.55–0.93 on
+      the GT box); the wide gate is how 17 of non_coco's 19 relocks land on
+      their own target. Position alone cannot tell the cases apart.
 - [ ] 2. One track per object: two active tracks on one box for long, the
       lower-quality one drops to OCCLUDED. Regression: pupils in
       demo_detect and phase3_verify.
 - [ ] 3. REACQUIRING: OCCLUDED → REACQUIRING → TRACKING/LOST. Candidates:
       matched detections, propagator search in a window growing around the
       prediction. Never takes an active track's ID; ambiguous stays
-      REACQUIRING. NCC scoring first.
+      REACQUIRING. NCC scoring first. From step 1: OCCLUDED takes only
+      observations near the prediction; a far one is a candidate; one
+      threshold for the Kalman update and for leaving OCCLUDED. Regressions:
+      phase3_verify2 f372 (no jump), non_coco and fast_motion relocks kept.
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.
@@ -215,5 +230,3 @@ Acceptance: tests green, ruff clean, replay reproduces; fixtures show
 reacquisition; wrong relocks 0 or reported; R3a p95 ≤ 100 ms; owner
 verifies on camera.
 Start (EVALUATION.md, nano_ncc + detection): recoveries 0/6, wrong relocks 12.
-Known cost: step 1 ends the lucky re-find in phase3_verify2; until step 3
-that phone goes LOST.

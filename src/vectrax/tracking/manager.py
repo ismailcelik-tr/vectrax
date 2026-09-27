@@ -36,9 +36,10 @@ __all__ = ["TrackManager", "TrackSnapshot"]
 OPERATOR_SCORE = 1.0
 TRAIL_LEN = 90
 
-_UPDATED = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
+_UPDATED = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED,
+                      TrackState.REACQUIRING})
 # Owner's rule: a detection may lift these to TRACKING; no detection never demotes.
-_LIFTABLE = frozenset({TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
+_LIFTABLE = frozenset({TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED, TrackState.REACQUIRING})
 _VISIBLE = frozenset({TrackState.TRACKING, TrackState.DEGRADED})
 
 

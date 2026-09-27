@@ -44,11 +44,13 @@ _COLORS = {
     TrackState.TRACKING: (0, 220, 0),
     TrackState.DEGRADED: (0, 220, 255),
     TrackState.OCCLUDED: (0, 140, 255),
+    TrackState.REACQUIRING: (211, 0, 148),
     TrackState.LOST: (0, 0, 255),
     TrackState.PAUSED: (160, 160, 160),
     TrackState.STOPPED: (80, 80, 80),
 }
-_PAUSABLE = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED})
+_PAUSABLE = frozenset({TrackState.INITIALIZING, TrackState.TRACKING, TrackState.DEGRADED, TrackState.OCCLUDED,
+                       TrackState.REACQUIRING})
 _DRAG_COLOR = (255, 0, 255)
 _DETECTION_COLOR = (0, 200, 255)
 _FOCUS_COLOR = (255, 255, 255)

@@ -10,7 +10,7 @@ from vectrax.tracking.observation import Observation, Origin
 from vectrax.tracking.state import Command, TrackState
 
 FRAME_NS = NS_PER_S // 30
-CFG = TrackingConfig(confirm_frames=3, occlusion_timeout_ns=NS_PER_S // 2)
+CFG = TrackingConfig(confirm_frames=3, occlusion_timeout_ns=NS_PER_S // 2, reacquire_timeout_ns=NS_PER_S // 2)
 BOX = Box(0.5, 0.5, 0.1, 0.1)
 S = TrackState
 
@@ -86,7 +86,10 @@ def test_weak_then_missing_then_timeout():
     assert _run(mgr, 4, 1)[tid].state is S.OCCLUDED
 
     frames_to_timeout = CFG.occlusion_timeout_ns // FRAME_NS + 1
-    assert _run(mgr, 5, frames_to_timeout)[tid].state is S.LOST
+    assert _run(mgr, 5, frames_to_timeout)[tid].state is S.REACQUIRING
+
+    frames_to_lost = CFG.reacquire_timeout_ns // FRAME_NS + 2
+    assert _run(mgr, 5 + frames_to_timeout, frames_to_lost)[tid].state is S.LOST
 
 
 def test_occluded_track_keeps_predicting():
@@ -332,7 +335,7 @@ def test_a_detection_does_not_revive_a_lost_track():
     mgr, _, _ = _manager(lambda i: 0.9 if i < READY else None)
     tid = mgr.select(BOX)
     _confirm(mgr, [(BOX, LABEL)])
-    frames_to_lost = READY + CFG.occlusion_timeout_ns // FRAME_NS + 2
+    frames_to_lost = READY + (CFG.occlusion_timeout_ns + CFG.reacquire_timeout_ns) // FRAME_NS + 3
     _run(mgr, READY, frames_to_lost - READY)
     assert _state(mgr, frames_to_lost, tid) is S.LOST
 

@@ -37,7 +37,7 @@ PROPAGATORS = {
     "nano": NanoPropagator,
     "nano_ncc": lambda: NanoPropagator(score=ScoreSource.NCC),
 }
-HIDDEN = ("occluded", "lost")
+HIDDEN = ("occluded", "reacquiring", "lost")
 
 
 def _git(*args):

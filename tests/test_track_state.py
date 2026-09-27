@@ -14,7 +14,7 @@ from vectrax.tracking.state import (
 )
 
 CFG = TrackingConfig(min_quality=0.3, good_quality=0.6, confirm_frames=3,
-                     init_timeout_ns=1_000, occlusion_timeout_ns=500)
+                     init_timeout_ns=1_000, occlusion_timeout_ns=500, reacquire_timeout_ns=1_000)
 GOOD, WEAK, BAD = 0.9, 0.4, 0.1
 
 
@@ -68,8 +68,8 @@ def test_occluded_stays_within_timeout():
     assert next_state(S.OCCLUDED, ev(None, since_visible=500), CFG) is S.OCCLUDED
 
 
-def test_occluded_to_lost_after_timeout():
-    assert next_state(S.OCCLUDED, ev(None, since_visible=501), CFG) is S.LOST
+def test_occluded_to_reacquiring_after_timeout():
+    assert next_state(S.OCCLUDED, ev(None, since_visible=501), CFG) is S.REACQUIRING
 
 
 def test_occluded_to_tracking_on_good():
@@ -80,6 +80,22 @@ def test_occluded_to_degraded_on_weak():
     assert next_state(S.OCCLUDED, ev(WEAK), CFG) is S.DEGRADED
 
 
+def test_reacquiring_stays_within_timeout():
+    assert next_state(S.REACQUIRING, ev(None, since_visible=501, in_state=1_000), CFG) is S.REACQUIRING
+
+
+def test_reacquiring_to_lost_after_timeout():
+    assert next_state(S.REACQUIRING, ev(None, since_visible=501, in_state=1_001), CFG) is S.LOST
+
+
+def test_reacquiring_to_tracking_on_good():
+    assert next_state(S.REACQUIRING, ev(GOOD, since_visible=501), CFG) is S.TRACKING
+
+
+def test_reacquiring_to_degraded_on_weak():
+    assert next_state(S.REACQUIRING, ev(WEAK, since_visible=501), CFG) is S.DEGRADED
+
+
 @pytest.mark.parametrize("state", [S.LOST, S.PAUSED, S.STOPPED])
 def test_operator_only_states_ignore_evidence(state):
     assert next_state(state, ev(GOOD, good_recent=10), CFG) is state
@@ -87,7 +103,7 @@ def test_operator_only_states_ignore_evidence(state):
 
 # Operator commands.
 
-@pytest.mark.parametrize("state", [S.INITIALIZING, S.TRACKING, S.DEGRADED, S.OCCLUDED])
+@pytest.mark.parametrize("state", [S.INITIALIZING, S.TRACKING, S.DEGRADED, S.OCCLUDED, S.REACQUIRING])
 def test_pause_from_active(state):
     assert apply_command(state, Command.PAUSE) is S.PAUSED
 

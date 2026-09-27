@@ -1,17 +1,21 @@
 """Track state machine.
 
-DEGRADED  = visible, quality below good.
-OCCLUDED  = not visible, within occlusion timeout.
-LOST      = not visible past the timeout. Leaves only by operator command.
+DEGRADED    = visible, quality below good.
+OCCLUDED    = not visible, within occlusion timeout.
+REACQUIRING = not visible past the occlusion timeout; searching.
+LOST        = reacquisition timed out. Leaves only by operator command.
 
     INITIALIZING ──confirm──► TRACKING ◄──► DEGRADED
          │                     │  ▲          │
       timeout              bad │  │ good     │ bad
          ▼                     ▼  │          ▼
-        LOST ◄──timeout──── OCCLUDED ◄───────┘
+        LOST                OCCLUDED ◄───────┘
+         ▲                     │
+         │                  timeout
+         │                     ▼
+         └────timeout──── REACQUIRING ──good──► TRACKING
 
 PAUSE / RESUME / RESELECT / STOP are operator commands (see apply_command).
-REACQUIRING arrives in Phase 4.
 """
 
 from dataclasses import dataclass
@@ -27,6 +31,7 @@ class TrackState(Enum):
     TRACKING = "tracking"
     DEGRADED = "degraded"
     OCCLUDED = "occluded"
+    REACQUIRING = "reacquiring"
     LOST = "lost"
     PAUSED = "paused"
     STOPPED = "stopped"
@@ -52,14 +57,16 @@ class Evidence:
 
 
 _S = TrackState
-_ACTIVE = frozenset({_S.INITIALIZING, _S.TRACKING, _S.DEGRADED, _S.OCCLUDED})
+_ACTIVE = frozenset({_S.INITIALIZING, _S.TRACKING, _S.DEGRADED, _S.OCCLUDED, _S.REACQUIRING})
+_HIDDEN = frozenset({_S.OCCLUDED, _S.REACQUIRING})
 _OPERATOR_ONLY = frozenset({_S.LOST, _S.PAUSED, _S.STOPPED})
 
 ALLOWED: dict[TrackState, frozenset[TrackState]] = {
     _S.INITIALIZING: frozenset({_S.INITIALIZING, _S.TRACKING, _S.LOST, _S.PAUSED, _S.STOPPED}),
     _S.TRACKING: frozenset({_S.DEGRADED, _S.OCCLUDED, _S.INITIALIZING, _S.PAUSED, _S.STOPPED}),
     _S.DEGRADED: frozenset({_S.TRACKING, _S.OCCLUDED, _S.INITIALIZING, _S.PAUSED, _S.STOPPED}),
-    _S.OCCLUDED: frozenset({_S.TRACKING, _S.DEGRADED, _S.LOST, _S.INITIALIZING, _S.PAUSED, _S.STOPPED}),
+    _S.OCCLUDED: frozenset({_S.TRACKING, _S.DEGRADED, _S.REACQUIRING, _S.INITIALIZING, _S.PAUSED, _S.STOPPED}),
+    _S.REACQUIRING: frozenset({_S.TRACKING, _S.DEGRADED, _S.LOST, _S.INITIALIZING, _S.PAUSED, _S.STOPPED}),
     _S.LOST: frozenset({_S.INITIALIZING, _S.STOPPED}),
     _S.PAUSED: frozenset({_S.INITIALIZING, _S.STOPPED}),
     _S.STOPPED: frozenset(),
@@ -72,7 +79,7 @@ def next_state(state: TrackState, ev: Evidence, cfg: TrackingConfig) -> TrackSta
 
     h = cfg.quality_hysteresis
     # Hysteresis: leaving the current band needs a margin of h.
-    min_q = cfg.min_quality + h if state is _S.OCCLUDED else cfg.min_quality
+    min_q = cfg.min_quality + h if state in _HIDDEN else cfg.min_quality
     good_q = cfg.good_quality - h if state is _S.TRACKING else cfg.good_quality
     visible = ev.quality is not None and ev.quality >= min_q
     if state is _S.INITIALIZING:
@@ -85,8 +92,11 @@ def next_state(state: TrackState, ev: Evidence, cfg: TrackingConfig) -> TrackSta
         return _S.INITIALIZING
 
     if not visible:
+        if state is _S.REACQUIRING:
+            return _S.LOST if ev.ns_in_state > cfg.reacquire_timeout_ns else _S.REACQUIRING
+
         if state is _S.OCCLUDED and ev.ns_since_visible > cfg.occlusion_timeout_ns:
-            return _S.LOST
+            return _S.REACQUIRING
 
         return _S.OCCLUDED
 

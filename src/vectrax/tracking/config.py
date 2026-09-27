@@ -22,7 +22,9 @@ class TrackingConfig:
     confirm_frames: int = 3
     confirm_window: int = 9
     init_timeout_ns: int = 1 * NS_PER_S
-    occlusion_timeout_ns: int = 3 * NS_PER_S
+    # Owner's call (2026-09-27): 1 s OCCLUDED, then 5 s REACQUIRING, then LOST.
+    occlusion_timeout_ns: int = 1 * NS_PER_S
+    reacquire_timeout_ns: int = 5 * NS_PER_S
 
     # Kalman, normalized units (frame fraction) per second.
     meas_std: float = 0.005
@@ -59,8 +61,8 @@ class TrackingConfig:
         if not 0 < self.confirm_frames <= self.confirm_window:
             raise ValueError("need 0 < confirm_frames <= confirm_window")
 
-        if min(self.init_timeout_ns, self.occlusion_timeout_ns, self.coast_tau_ns, self.detection_hold_ns,
-               self.same_object_ns) <= 0:
+        if min(self.init_timeout_ns, self.occlusion_timeout_ns, self.reacquire_timeout_ns, self.coast_tau_ns,
+               self.detection_hold_ns, self.same_object_ns) <= 0:
             raise ValueError("timeouts must be > 0")
 
         for name in ("meas_std", "acc_std", "size_acc_std", "init_vel_std", "motion_gate"):

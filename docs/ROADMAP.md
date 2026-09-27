@@ -206,9 +206,19 @@ Steps, one commit each, test first:
       off-frame) and the propagator right (fast_motion scores 0.55–0.93 on
       the GT box); the wide gate is how 17 of non_coco's 19 relocks land on
       their own target. Position alone cannot tell the cases apart.
-- [ ] 2. One track per object: two active tracks on one box for long, the
+- [x] 2. One track per object: two active tracks on one box for long, the
       lower-quality one drops to OCCLUDED. Regression: pupils in
       demo_detect and phase3_verify.
+      Rule: two visible tracks whose centers lie in each other's box for
+      same_object_ns (0.5 s, PROVISIONAL); lower quality yields (tie: newer)
+      and stays OCCLUDED while its propagator sits on that box. Replay with
+      detection, frames both pupil tracks claimed one box (IoU ≥ 0.5):
+      demo_detect 560 → 64, phase3_verify 871 → 13; other tracks' states
+      unchanged. The yielded pupil goes LOST: nothing re-finds it before
+      step 3. Which pupil each keeps is not checked (no GT). Fixtures
+      unchanged (raw 20260927-135956_nano_ncc_detect.json,
+      20260927-140013_nano_ncc.json): distinct objects' visible tracks never
+      overlapped past IoU 0.17.
 - [ ] 3. REACQUIRING: OCCLUDED → REACQUIRING → TRACKING/LOST. Candidates:
       matched detections, propagator search in a window growing around the
       prediction. Never takes an active track's ID; ambiguous stays

@@ -230,3 +230,51 @@ Reading:
   IDSW 0.
 - HOTA sits below success everywhere because it also scores box fit at IoU
   above 0.5: single_target is 100 % success, 71 % HOTA.
+
+## Re-ID scorers on reacquisition candidates (Phase 4, 2026-09-27, git 9b687a3)
+
+Branch phase4-reacquire. Command: `uv run benchmarks/reid_eval.py
+--detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage`.
+Raw: `benchmarks/results/reid/20260927-143626_reid.json`. Clean tree.
+Reacquisition only watches (infinite margin), so each REACQUIRING spell
+runs its full 5 s. Candidates come from the NCC search (2 peaks) and the
+propagator's box: 2365 in all, own 449, other 3,
+bg 1022, absent 891. The target was among them in
+63 % of REACQUIRING frames where it was visible. Gallery: the
+selection plus every 5th earlier TRACKING frame at good quality.
+
+| Scorer / reference | AUC | vs bg | vs absent | clean recall | spells own / wrong / none |
+|---|---|---|---|---|---|
+| ncc/selection | 0.53 | 0.39 | 0.69 | 0.02 | 2 / 4 / 0 |
+| ncc/gallery | 0.58 | 0.45 | 0.72 | 0.02 | 2 / 4 / 0 |
+| hist/selection | 0.85 | 0.96 | 0.72 | 0.06 | 4 / 2 / 0 |
+| hist/gallery | 0.96 | 0.98 | 0.93 | 0.09 | 3 / 3 / 0 |
+| dino/selection | 0.94 | 0.94 | 0.94 | 0.14 | 5 / 0 / 1 |
+| dino/gallery | 0.95 | 0.95 | 0.96 | 0.04 | 4 / 1 / 1 |
+
+AUC: own candidate vs the rest. Clean recall: own share above the best
+non-own score. Spells: first pick by the manager's rule (good_quality 0.6,
+margin 0.1) in each of the 6 spells.
+
+| Spell | Frames | Target proposed (frames) | NCC / selection | hist / gallery | DINOv2 / selection |
+|---|---|---|---|---|---|
+| crossing_targets | 115–264 | 76 | own f240 | bg f212 | own f116 |
+| occlusion | 71–154 | 1 | absent f72 | absent f92 | own f154 |
+| occlusion | 301–450 | 0 | absent f302 | absent f302 | — |
+| exit_reentry | 193–342 | 13 | own f331 | own f337 | own f337 |
+| fast_motion | 95–244 | 101 | bg f98 | own f96 | own f111 |
+| non_coco | 147–296 | 140 | bg f148 | own f148 | own f148 |
+
+Reading:
+- Gray NCC is chance level (AUC 0.53; 0.39 against background) and picks
+  wrong in 4 of 6 spells. It cannot score reacquisition.
+- DINOv2-S against the selection picks its own target in the 5 spells
+  where it was proposed, and nothing in the one where it never was. Six
+  spells: enough to rule NCC out, not to set thresholds; the rule above
+  uses the config defaults, not values fitted here.
+- HSV histograms separate well by AUC (0.96 with the gallery) but pick
+  wrong in 2–3 spells at the same rule.
+- Proposals limit what any scorer can do: the second occlusion spell never
+  proposed the cup, exit_reentry did in 13 of 149 frames.
+- None of these fixtures has a look-alike; twin_reentry will test that.
+

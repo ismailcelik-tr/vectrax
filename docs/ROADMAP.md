@@ -238,6 +238,10 @@ Steps, one commit each, test first:
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.
+      Offline comparison done (EVALUATION.md, branch phase4-reacquire): NCC
+      is chance level; DINOv2-S against the selection picked right in all 5
+      spells where the target was proposed, over 6 spells in all. Open:
+      its cost on the worker, detections as proposals, the twin fixture.
 - [ ] 6. Phase 3 leftovers: count results older than the 1 s history;
       detection evidence and label in TrackSnapshot; margin for tied
       candidates; causes of crossing hijack, exit_reentry false-visible,

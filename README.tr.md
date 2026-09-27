@@ -1,12 +1,24 @@
+<div align="center">
+
 # VectraX
 
-[English](README.md) | **Türkçe**
+Operatör güdümlü, gerçek zamanlı görsel takip.
 
-Mac kamerasında operatör güdümlü, gerçek zamanlı görsel takip. Operatör
-herhangi bir nesnenin etrafına kutu çizer; VectraX onu kare kare izler, ne
-kadar emin olduğunu bildirir ve hiçbir detector'ün tanımadığı nesnelerde de
-çalışır. Kullanım alanları: izleme, robotik, denetim ve araştırma. v1 hiçbir
-donanımı hareket ettirmez.
+[![License](https://img.shields.io/github/license/ismailcelik-tr/vectrax)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](#platform-desteği)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Last commit](https://img.shields.io/github/last-commit/ismailcelik-tr/vectrax)](https://github.com/ismailcelik-tr/vectrax/commits/main)
+
+[English](README.md) · **Türkçe**
+
+</div>
+
+Operatör herhangi bir nesnenin etrafına kutu çizer; VectraX onu kare kare
+izler, ne kadar emin olduğunu bildirir ve hiçbir detector'ün tanımadığı
+nesnelerde de çalışır. Kullanım alanları: izleme, robotik, denetim ve
+araştırma. v1 hiçbir donanımı hareket ettirmez.
 
 ## Durum
 
@@ -43,12 +55,24 @@ Tick asla inference'ı beklemez.
 
 Tasarım kararları ve kanıtları: [docs/DECISIONS.md](docs/DECISIONS.md).
 
+## Platform desteği
+
+Kareler `CameraSource` arayüzünden girer; takip, bir kareyi hangi kaynağın
+ürettiğini bilmez. Yeni bir kamera yeni bir source demektir; tracker
+değişmez.
+
+| Katman | Bugün | Sonra ([SPEC](docs/SPEC.md)) |
+|---|---|---|
+| Kamera kaynağı | macOS kameraları (AVFoundation) | USB (UVC), RTSP |
+| Dosya kaynağı | video klipleri | — |
+| Detector backend | Core ML | CUDA / TensorRT, edge cihazlar |
+
 ## Gereksinimler
 
-- Apple Silicon üzerinde macOS. Görüntü alma AVFoundation, detector Core ML
-  kullanır. Geliştirme makinesi: [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
+- Bugün: Apple Silicon üzerinde macOS. Geliştirme makinesi:
+  [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 - Python 3.13 (coremltools'un 3.14 wheel'i yok) ve [uv](https://docs.astral.sh/uv/).
-- Kamera: terminale kamera izni ver; Center Stage'i kapat.
+- macOS kamerası: terminale kamera izni ver; Center Stage'i kapat.
 
 ## Kurulum
 
@@ -100,7 +124,7 @@ uv run vectrax --source file:data/sessions/NAME/video.mp4 --headless \
   --render-out review.mp4
 ```
 
-`camera:NAME` cihaz adının bir parçasıyla ya da unique ID'siyle eşleşir.
+macOS'ta `camera:NAME` cihaz adının bir parçasıyla ya da unique ID'siyle eşleşir.
 Headless koşular operatör girdisini bulunan ilk kaynaktan alır:
 `--init-boxes`, oturumun `operator.jsonl` dosyası, klibin
 `<clip>.init.json` dosyası.
@@ -160,7 +184,7 @@ dağıtılmaz. Kayıt ve etiketleme: [docs/FIXTURES.md](docs/FIXTURES.md).
 
 ```
 src/vectrax/
-  sources/      kamera (AVFoundation) ve dosya kaynakları
+  sources/      CameraSource arayüzü; macOS kamerası, dosya
   tracking/     propagator'lar, Kalman, kalite, durumlar, association, TrackManager
   detection/    Core ML detector, inference worker
   evaluation/   ground-truth yükleyici, metrikler
@@ -205,4 +229,8 @@ kurulumları kaldırır; `.venv/` de dahil. Proje klasörünü silmez.
 
 ## Lisans
 
-Henüz lisans yok.
+[Apache License 2.0](LICENSE).
+
+Model ağırlıkları ve üçüncü taraf paketler kendi lisanslarını korur
+([docs/SETUP.md](docs/SETUP.md)). `ultralytics` (AGPL-3.0) yalnız benchmark
+referansıdır, asla runtime dependency değildir.

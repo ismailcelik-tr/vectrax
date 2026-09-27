@@ -1,12 +1,24 @@
+<div align="center">
+
 # VectraX
 
-**English** | [Türkçe](README.tr.md)
+Real-time, operator-driven visual tracking.
 
-Real-time, operator-driven visual tracking on a Mac camera. The operator
-draws a box around any object; VectraX follows it frame by frame, reports
-how confident it is, and keeps working on objects no detector knows.
-Intended for monitoring, robotics, inspection and research. v1 never
-moves hardware.
+[![License](https://img.shields.io/github/license/ismailcelik-tr/vectrax)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](#platform-support)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Last commit](https://img.shields.io/github/last-commit/ismailcelik-tr/vectrax)](https://github.com/ismailcelik-tr/vectrax/commits/main)
+
+**English** · [Türkçe](README.tr.md)
+
+</div>
+
+The operator draws a box around any object; VectraX follows it frame by
+frame, reports how confident it is, and keeps working on objects no
+detector knows. Intended for monitoring, robotics, inspection and research.
+v1 never moves hardware.
 
 ## Status
 
@@ -42,12 +54,24 @@ The tick never waits on inference.
 
 Design decisions and their evidence: [docs/DECISIONS.md](docs/DECISIONS.md).
 
+## Platform support
+
+Frames enter through the `CameraSource` interface; tracking never knows
+which source produced a frame. New cameras are new sources, not changes to
+the tracker.
+
+| Layer | Today | Later ([SPEC](docs/SPEC.md)) |
+|---|---|---|
+| Camera source | macOS cameras (AVFoundation) | USB (UVC), RTSP |
+| File source | video clips | — |
+| Detector backend | Core ML | CUDA / TensorRT, edge devices |
+
 ## Requirements
 
-- macOS on Apple Silicon. Capture uses AVFoundation, the detector Core ML.
-  Development machine: [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
+- Today: macOS on Apple Silicon. Development machine:
+  [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 - Python 3.13 (coremltools has no 3.14 wheel) and [uv](https://docs.astral.sh/uv/).
-- Camera: grant the terminal camera access; turn Center Stage off.
+- macOS camera: grant the terminal camera access; turn Center Stage off.
 
 ## Setup
 
@@ -98,7 +122,7 @@ uv run vectrax --source file:data/sessions/NAME/video.mp4 --headless \
   --render-out review.mp4
 ```
 
-`camera:NAME` matches part of the device name or its unique ID. Headless
+On macOS, `camera:NAME` matches part of the device name or its unique ID. Headless
 runs take operator input from the first that exists: `--init-boxes`, the
 session's `operator.jsonl`, the clip's `<clip>.init.json`.
 
@@ -157,7 +181,7 @@ distributed. Recording and annotation: [docs/FIXTURES.md](docs/FIXTURES.md).
 
 ```
 src/vectrax/
-  sources/      camera (AVFoundation) and file sources
+  sources/      CameraSource interface; macOS camera, file
   tracking/     propagators, Kalman, quality, states, association, TrackManager
   detection/    Core ML detector, inference worker
   evaluation/   ground-truth loader, metrics
@@ -201,4 +225,8 @@ project folder.
 
 ## License
 
-No license yet.
+[Apache License 2.0](LICENSE).
+
+Model weights and third-party packages keep their own licenses
+([docs/SETUP.md](docs/SETUP.md)). `ultralytics` (AGPL-3.0) is a benchmark
+reference only, never a runtime dependency.

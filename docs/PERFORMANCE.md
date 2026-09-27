@@ -228,3 +228,31 @@ Reading:
 - An earlier session (~22:18, `20260925-221812_*`, `20260925-221928_*`) ran
   on an untextured scene: tracks dead in three of four runs. R3a p95 56.6 /
   57.4 ms with detection on (1 / 3 targets); same outcome.
+
+## DINOv2-S Re-ID embedding (2026-09-27 ~14:45, AC power, Low Power Mode off)
+
+Branch phase4-reacquire. Command: `uv run benchmarks/reid_latency.py`
+(Core ML package from `uv run benchmarks/export_reid.py`, fp16, cosine
+≥ 0.9996 against PyTorch fp32). Raw:
+`benchmarks/results/reid_latency/20260927-144457_dinov2s.json`, git
+`ef72c50`, clean tree. Model call only on preprocessed 224x224 crops;
+200 calls after 10 warm-up per batch size. p50 / p95 ms per call.
+
+| Backend | load + first ms | 1 crop | 2 crops | 4 crops | 8 crops |
+|---|---|---|---|---|---|
+| torch-cpu | 338 | 17.4 / 19.9 | 30.0 / 34.1 | 51.4 / 57.1 | 102.5 / 111.8 |
+| torch-mps | 288 | 9.1 / 9.5 | 14.0 / 14.6 | 22.7 / 23.5 | 42.2 / 43.1 |
+| coreml-all | 589 | 43.1 / 45.0 | 82.0 / 88.5 | 164.0 / 176.0 | 335.5 / 357.1 |
+| coreml-gpu | 409 | 41.6 / 45.3 | 82.1 / 88.5 | 165.2 / 176.4 | 334.4 / 349.9 |
+| coreml-ane | 408 | 7.5 / 8.1 | 13.2 / 14.1 | 24.6 / 26.7 | 48.2 / 51.5 |
+
+Reading:
+- ANE is fastest (7.5 ms for one crop) and is not the GPU the detector
+  runs on; MPS is close (9.1 ms).
+- Batching barely amortizes on any backend: 8 crops cost ~6× one.
+- Core ML on the GPU (and ALL, which picks it) is ~5× slower than ANE for
+  this model; cause not examined.
+- At 3 candidates per frame (EVALUATION.md) one scoring costs ~20 ms on
+  ANE: every frame would not fit beside the detector on one worker at
+  30 fps. Cadence is a design choice for ADR-011.
+

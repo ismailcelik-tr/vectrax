@@ -132,7 +132,8 @@ def _collect(name, cfg, detect):
                                   "box": [round(v, 4) for v in (c.box.cx, c.box.cy, c.box.w, c.box.h)],
                                   "label": labels[-1], "crop": crop, "refs": len(refs[gid])})
 
-                frames.append({"visible": f in gt.tracks[gid], "proposed": "own" in labels})
+                frames.append({"fixture": name, "gid": gid, "frame": f, "visible": f in gt.tracks[gid],
+                               "proposed": "own" in labels})
     finally:
         pipe.close()
 
@@ -193,6 +194,42 @@ def _recall_clean(pos, neg):
 
     top = max(neg) if neg else -math.inf
     return float(np.mean(np.asarray(pos) > top))
+
+
+def _spells(frames):
+    """Runs of consecutive REACQUIRING frames per track."""
+    runs = []
+    for f in frames:
+        last = runs[-1][-1] if runs else None
+        if last and (last["fixture"], last["gid"]) == (f["fixture"], f["gid"]) and f["frame"] == last["frame"] + 1:
+            runs[-1].append(f)
+        else:
+            runs.append([f])
+
+    return runs
+
+
+def _first_pick(spell, by_frame, cands, vals, cfg):
+    """The manager's rule: best object candidate with good_quality and reacquire_margin over the next."""
+    for f in spell:
+        objects = []
+        for i in sorted(by_frame.get((f["fixture"], f["gid"], f["frame"]), []), key=lambda i: -vals[i]):
+            if not any(_same(cands[i]["box"], cands[j]["box"]) for j in objects):
+                objects.append(i)
+
+        if not objects:
+            continue
+
+        runner_up = vals[objects[1]] if len(objects) > 1 else 0.0
+        if vals[objects[0]] >= cfg.good_quality and vals[objects[0]] - runner_up >= cfg.reacquire_margin:
+            return f["frame"], cands[objects[0]]["label"]
+
+    return None
+
+
+def _same(a, b):
+    """Each center lies inside the other box (TrackManager's rule)."""
+    return abs(a[0] - b[0]) <= min(a[2], b[2]) / 2 and abs(a[1] - b[1]) <= min(a[3], b[3]) / 2
 
 
 def _fmt(v):
@@ -260,6 +297,22 @@ def main():
         report["scorers"][key] = row
         print(f"{key:16s} {_fmt(row['auc']):>5s} {_fmt(row['auc_bg']):>6s} {_fmt(row['auc_absent']):>9s} "
               f"{_fmt(row['auc_other']):>8s} {_fmt(row['clean_recall']):>12s}")
+
+    rule = TrackingConfig()
+    by_frame = defaultdict(list)
+    for i, c in enumerate(cands):
+        by_frame[(c["fixture"], c["gid"], c["frame"])].append(i)
+
+    spells = _spells(frames)
+    report["spells"] = [{"fixture": s[0]["fixture"], "gid": s[0]["gid"], "frames": [s[0]["frame"], s[-1]["frame"]],
+                         "proposed": sum(f["proposed"] for f in s)} for s in spells]
+    print(f"\nFirst pick per REACQUIRING spell (good_quality {rule.good_quality}, margin {rule.reacquire_margin})")
+    for key, vals in scores.items():
+        picks = [_first_pick(s, by_frame, cands, vals, rule) for s in spells]
+        report["scorers"][key]["picks"] = picks
+        own = sum(p is not None and p[1] == "own" for p in picks)
+        wrong = sum(p is not None and p[1] != "own" for p in picks)
+        print(f"{key:16s} own {own}  wrong {wrong}  none {len(picks) - own - wrong}")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_reid.json"

@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from vectrax.evaluation.gt import load_mot
-from vectrax.evaluation.metrics import PredBox, TrackResult, evaluate_track
+from vectrax.evaluation.metrics import (
+    PredBox,
+    TrackResult,
+    evaluate_track,
+    identity_scores,
+)
 from vectrax.pipeline import build_file_pipeline
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
@@ -25,6 +30,7 @@ GT_SUFFIX = ".gt.zip"
 class FixtureResult:
     tracks: dict[int, TrackResult]  # GT track id → result
     track_ms: dict
+    identity: dict  # IDSW, IDF1, HOTA over all targets
 
 
 def run_fixture(video: Path | str, propagator_factory: Callable[[], Propagator],
@@ -51,11 +57,12 @@ def run_fixture(video: Path | str, propagator_factory: Callable[[], Propagator],
     finally:
         pipe.close()
 
+    gt_boxes = {gid: {f: b.box for f, b in boxes.items()} for gid, boxes in gt.tracks.items()}
     results = {}
     for gid, boxes in gt.tracks.items():
         vis = {f: b.visibility for f, b in boxes.items()}
-        own = {f: b.box for f, b in boxes.items()}
-        others = {o: {f: b.box for f, b in ob.items()} for o, ob in gt.tracks.items() if o != gid}
-        results[gid] = evaluate_track(vis, own, preds[gid], others)
+        others = {o: ob for o, ob in gt_boxes.items() if o != gid}
+        results[gid] = evaluate_track(vis, gt_boxes[gid], preds[gid], others)
 
-    return FixtureResult(results, pipe.metrics.summary()["track_ms"])
+    # preds is keyed by the GT id that selected each track, which is unique per track.
+    return FixtureResult(results, pipe.metrics.summary()["track_ms"], identity_scores(gt_boxes, preds))

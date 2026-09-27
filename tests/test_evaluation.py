@@ -3,12 +3,19 @@ import zipfile
 import pytest
 
 from vectrax.evaluation.gt import Visibility, load_mot
-from vectrax.evaluation.metrics import PredBox, evaluate_track, iou
+from vectrax.evaluation.metrics import (
+    PredBox,
+    Relock,
+    evaluate_track,
+    identity_scores,
+    iou,
+)
 from vectrax.tracking.state import TrackState
 
 S = TrackState
 BOX = (100.0, 100.0, 50.0, 50.0)
 FAR = (500.0, 500.0, 50.0, 50.0)
+NOWHERE = (300.0, 300.0, 50.0, 50.0)
 
 
 def _zip(tmp_path, lines):
@@ -166,6 +173,7 @@ def test_run_fixture_on_synthetic_clip(tmp_path):
     assert track.frames_scored == n
     assert track.success_rate > 0.9
     assert result.track_ms["n"] == n
+    assert result.identity["idsw"] == 0
 
 
 def test_on_target_counts_small_boxes_inside_the_object():
@@ -178,3 +186,56 @@ def test_on_target_counts_small_boxes_inside_the_object():
 
     assert r.success_rate == 0.0
     assert r.on_target_rate == 0.5
+
+
+@pytest.mark.parametrize(("back_at", "expected"), [(BOX, Relock.OWN), (FAR, Relock.OTHER), (NOWHERE, Relock.BACKGROUND)])
+def test_relock_names_the_target_the_box_returned_to(back_at, expected):
+    gt_vis = _gt(_visible(3))
+    gt_box = dict.fromkeys(gt_vis, BOX)
+    other = {f: FAR for f in range(3)}
+    preds = [PredBox(S.TRACKING, BOX), PredBox(S.OCCLUDED, BOX), PredBox(S.TRACKING, back_at)]
+
+    r = evaluate_track(gt_vis, gt_box, preds, other_gt={2: other})
+
+    assert r.relocks == {2: expected}
+
+
+def test_relock_while_own_target_is_absent_is_wrong():
+    gt_vis = _gt([Visibility.VISIBLE, None, None])
+    gt_box = dict.fromkeys(gt_vis, BOX)
+    preds = [PredBox(S.TRACKING, BOX), PredBox(S.OCCLUDED, BOX), PredBox(S.TRACKING, BOX)]
+
+    r = evaluate_track(gt_vis, gt_box, preds, other_gt={})
+
+    assert r.relocks == {2: Relock.BACKGROUND}
+    assert r.wrong_relocks == 1
+
+
+def test_selection_is_not_a_relock():
+    gt_vis = _gt(_visible(2))
+    gt_box = dict.fromkeys(gt_vis, BOX)
+    preds = [None, PredBox(S.INITIALIZING, BOX)]
+
+    assert evaluate_track(gt_vis, gt_box, preds, other_gt={}).relocks == {}
+
+
+def test_identity_counts_a_swap_between_two_targets():
+    gt = {1: dict.fromkeys(range(6), BOX), 2: dict.fromkeys(range(6), FAR)}
+    first = [PredBox(S.TRACKING, BOX)] * 3 + [PredBox(S.TRACKING, FAR)] * 3
+    second = [PredBox(S.TRACKING, FAR)] * 3 + [PredBox(S.TRACKING, BOX)] * 3
+
+    swapped = identity_scores(gt, {1: first, 2: second})
+    kept = identity_scores(gt, {1: [PredBox(S.TRACKING, BOX)] * 6, 2: [PredBox(S.TRACKING, FAR)] * 6})
+
+    assert swapped["idsw"] == 2
+    assert swapped["idf1"] == pytest.approx(0.5)
+    assert kept["idsw"] == 0
+    assert kept["idf1"] == pytest.approx(1.0)
+    assert kept["hota"] == pytest.approx(1.0)
+
+
+def test_hidden_tracks_are_not_detections():
+    gt = {1: dict.fromkeys(range(4), BOX)}
+    track = [PredBox(S.TRACKING, BOX)] * 2 + [PredBox(S.OCCLUDED, BOX)] * 2
+
+    assert identity_scores(gt, {1: track})["idf1"] == pytest.approx(2 / 3)

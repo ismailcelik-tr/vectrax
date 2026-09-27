@@ -13,6 +13,7 @@ from pathlib import Path
 
 from vectrax.detection.coreml import CoreMlDetector
 from vectrax.detection.worker import InferenceWorker
+from vectrax.evaluation.metrics import Relock
 from vectrax.evaluation.runner import run_fixture
 from vectrax.metrics import RunMode
 from vectrax.tracking.propagators import (
@@ -56,6 +57,10 @@ def _summary(name, result):
         "on_target": sum(t.on_target for t in tracks) / present if present else 0.0,
         "false_visible": sum(t.false_visible for t in tracks),
         "hijack_frames": sum(t.hijack_frames for t in tracks),
+        "relocks": sum(len(t.relocks) for t in tracks),
+        "wrong_relocks": sum(t.wrong_relocks for t in tracks),
+        "wrong_relock_frames": sorted([f, k.value] for t in tracks for f, k in t.relocks.items() if k is not Relock.OWN),
+        **result.identity,
         "recoveries": [r for t in tracks for r in t.recoveries],
         "partial_as_degraded": partial_deg / partial if partial else None,
         "absent_as_hidden": absent_hidden / absent if absent else None,
@@ -80,10 +85,11 @@ def main():
         worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.DETERMINISTIC) if args.detect else None
         rows.append(_summary(name, run_fixture(FIXTURES / f"{name}.mp4", PROPAGATORS[args.propagator], worker=worker)))
 
-    print(f"\n{'fixture':17s} {'success':>7s} {'onTarget':>8s} {'falseVis':>8s} {'hijack':>6s} {'partial→deg':>11s} "
-          f"{'absent→hid':>10s} {'ms p50':>6s}  recoveries (frames)")
+    print(f"\n{'fixture':17s} {'success':>7s} {'onTarget':>8s} {'falseVis':>8s} {'hijack':>6s} {'relock':>6s} {'wrong':>5s} "
+          f"{'IDSW':>4s} {'IDF1':>5s} {'HOTA':>5s} {'partial→deg':>11s} {'absent→hid':>10s} {'ms p50':>6s}  recoveries (frames)")
     for r in rows:
         print(f"{r['fixture']:17s} {_pct(r['success']):>7s} {_pct(r['on_target']):>8s} {r['false_visible']:8d} {r['hijack_frames']:6d} "
+              f"{r['relocks']:6d} {r['wrong_relocks']:5d} {r['idsw']:4d} {_pct(r['idf1']):>5s} {_pct(r['hota']):>5s} "
               f"{_pct(r['partial_as_degraded']):>11s} {_pct(r['absent_as_hidden']):>10s} {r['track_ms_p50']:6.1f}  "
               f"{r['recoveries']}")
 

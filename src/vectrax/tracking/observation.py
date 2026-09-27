@@ -1,7 +1,9 @@
 """What a propagator, detector or operator reports about one target in one frame."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+
+import numpy as np
 
 from vectrax.tracking.geometry import Box
 
@@ -23,3 +25,4 @@ class Observation:
     score: float  # 0..1
     origin: Origin
     label: str | None = None  # detector class, a hint only (R1)
+    embedding: np.ndarray | None = field(default=None, compare=False)  # Re-ID, L2-normalized

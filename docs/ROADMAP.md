@@ -187,9 +187,10 @@ Owner's calls:
   fixtures).
 
 Steps, one commit each, test first:
-- [ ] 0. Metrics first: wrong relock (back on another target or on
+- [x] 0. Metrics first: wrong relock (back on another target or on
       background) and TrackEval IDSW/IDF1/HOTA; baseline of the current
-      system.
+      system. With detection: 12 wrong relocks, all on background
+      (fast_motion 10, non_coco 2); IDSW 1 (crossing_targets). EVALUATION.md.
 - [ ] 1. No unplanned re-find: OCCLUDED must not accept a far propagator
       observation. Regression: phase3_verify2 f372 (~930 px jump). Cause
       confirmed on replay before the test.
@@ -213,6 +214,6 @@ Steps, one commit each, test first:
 Acceptance: tests green, ruff clean, replay reproduces; fixtures show
 reacquisition; wrong relocks 0 or reported; R3a p95 ≤ 100 ms; owner
 verifies on camera.
-Start (EVALUATION.md, nano_ncc + detection): recoveries 0/6.
+Start (EVALUATION.md, nano_ncc + detection): recoveries 0/6, wrong relocks 12.
 Known cost: step 1 ends the lucky re-find in phase3_verify2; until step 3
 that phone goes LOST.

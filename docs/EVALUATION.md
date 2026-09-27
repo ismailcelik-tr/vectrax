@@ -17,6 +17,9 @@ not scored.
 | partial→deg | share of GT-partial frames the tracker reports as DEGRADED |
 | absent→hid | share of GT-absent frames reported OCCLUDED or LOST |
 | recoveries | per reappearance, frames until success again; None = never |
+| relock | track back in a visible state after OCCLUDED/LOST |
+| wrong | relock whose box center is not on its own target: on another target, or on background (own target absent counts as background) |
+| IDSW, IDF1, HOTA | TrackEval over all targets of a clip; a track counts only in visible states. IDSW and IDF1 match at IoU ≥ 0.5, HOTA averages IoU 0.05–0.95 |
 
 Command: `uv run benchmarks/tracking_eval.py --propagator <name>`.
 Raw: `benchmarks/results/tracking/`.
@@ -192,3 +195,38 @@ Reading:
   4 false-visible frames on exit_reentry, fast_motion −1 point.
 - Recoveries unchanged (none): a detection lifts a live track, it does not
   re-find a lost one.
+
+## Phase 4 baseline (2026-09-27, git def06af)
+
+Command: `uv run benchmarks/tracking_eval.py --propagator nano_ncc
+[--detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage]`.
+Raw: `benchmarks/results/tracking/20260927-133724_nano_ncc_detect.json` (on),
+`20260927-133740_nano_ncc.json` (off). Clean tree. Success, hijack, falseVis
+and recoveries reproduce the Phase 3 table exactly.
+
+| Fixture | relock (wrong) on | relock (wrong) off | IDSW on | IDF1 on | HOTA on |
+|---|---|---|---|---|---|
+| single_target | 0 (0) | 3 (0) | 0 | 100 | 71 |
+| crossing_targets | 1 (0) | 25 (16) | 1 | 70 | 50 |
+| near_targets | 1 (0) | 2 (0) | 0 | 100 | 84 |
+| occlusion | 0 (0) | 0 (0) | 0 | 17 | 7 |
+| exit_reentry | 0 (0) | 1 (0) | 0 | 54 | 33 |
+| fast_motion | 17 (10) | 17 (11) | 0 | 25 | 13 |
+| non_coco | 19 (2) | 19 (2) | 0 | 52 | 39 |
+| low_light | 0 (0) | 8 (0) | 0 | 100 | 83 |
+
+Reading:
+- occlusion and exit_reentry: no track comes back after the target
+  returns (0 relocks, recoveries all None). Step 3's target.
+- With detection, all 12 wrong relocks are on background: fast_motion 10,
+  non_coco 2. The track leaves OCCLUDED with its box off the target. Cause
+  not examined.
+- Without detection, 8 of crossing_targets' 16 wrong relocks land on the
+  other cup; detection removes them (1 relock, 0 wrong).
+- IDSW 1 on crossing_targets with detection, 0 elsewhere. Not yet tied to
+  the 3 hijack frames; step 6 examines both.
+- A relock is judged on its first frame by box center; IDSW needs IoU ≥ 0.5
+  matches. So crossing_targets off shows 8 relocks on the other cup and
+  IDSW 0.
+- HOTA sits below success everywhere because it also scores box fit at IoU
+  above 0.5: single_target is 100 % success, 71 % HOTA.

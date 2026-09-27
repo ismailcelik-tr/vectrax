@@ -46,6 +46,12 @@ class TrackingConfig:
     # one object; the weaker yields. Distinct fixture objects never overlapped
     # past IoU 0.17 while both visible; merged pupils held 0.5-0.89 for seconds.
     same_object_ns: int = NS_PER_S // 2
+    # REACQUIRING searches a window this many box sizes around the prediction,
+    # growing per second searched. A candidate needs good_quality appearance and
+    # this lead over any other object's candidate.
+    search_reach: float = 1.0
+    search_growth: float = 2.0
+    reacquire_margin: float = 0.1
 
     def __post_init__(self):
         if not 0 <= self.min_quality < self.good_quality <= 1:
@@ -74,3 +80,6 @@ class TrackingConfig:
 
         if self.assoc_label_weight < 1:
             raise ValueError("assoc_label_weight must be >= 1")
+
+        if min(self.search_reach, self.search_growth, self.reacquire_margin) < 0:
+            raise ValueError("search_reach, search_growth and reacquire_margin must be >= 0")

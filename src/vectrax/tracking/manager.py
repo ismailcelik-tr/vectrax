@@ -8,14 +8,15 @@ import threading
 from collections import deque
 from collections.abc import Callable, Sequence
 from concurrent.futures import Executor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum, auto
 from itertools import combinations
 
 from vectrax.events import Event, EventBus, EventType
 from vectrax.frames import FramePacket
+from vectrax.tracking.appearance import Appearance
 from vectrax.tracking.association import associate
-from vectrax.tracking.config import TrackingConfig
+from vectrax.tracking.config import NS_PER_S, TrackingConfig
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.history import TrackHistory, carry_forward
 from vectrax.tracking.kalman import CvKalman
@@ -78,6 +79,8 @@ class _Track:
         self.detected_ns: int | None = None  # capture_ns of the last frame a detection matched
         self.correction: Box | None = None  # matched detection, carried to the current frame
         self.yields_to: int | None = None  # track that keeps the object both sat on
+        self.look: Appearance | None = None  # at selection; scores reacquisition candidates
+        self.seen: Box | None = None  # last box while visible; sizes the search
         self.trail: deque[tuple[float, float]] = deque(maxlen=TRAIL_LEN)
 
 
@@ -199,6 +202,8 @@ class TrackManager:
         t.prop = self._factory()
         t.prop.init(frame, box)
         t.kf = CvKalman(box, frame.capture_ns, self._cfg)
+        t.look = Appearance(frame, box)
+        t.seen = box
         t.quality = TrackQuality(OPERATOR_SCORE, None)
         t.observed = box
         t.recent = deque([True], maxlen=self._cfg.confirm_window)
@@ -222,9 +227,19 @@ class TrackManager:
             elif obs is not None:
                 t.yields_to = None
 
+        if t.state is TrackState.REACQUIRING:
+            obs = self._reacquire(t, frame, obs)
+        elif t.state is TrackState.OCCLUDED and obs is not None and not _center_inside(obs.box, t.kf.box):
+            # Coasting widens the motion gate until it passes anything (phase3_verify2 f372);
+            # a far box waits for REACQUIRING's scoring.
+            obs = None
+
         residual = t.kf.residual(obs.box) if obs else None
         t.quality = TrackQuality(obs.score if obs else None, residual)
         q = t.quality.combined(self._cfg)
+        if t.state is TrackState.OCCLUDED and q is not None and q < self._cfg.min_quality + self._cfg.quality_hysteresis:
+            # Below what leaves OCCLUDED (next_state): must not move the box or restart the timeout.
+            q = None
 
         if q is not None and q >= self._cfg.min_quality:
             t.kf.update(obs.box)
@@ -249,6 +264,28 @@ class TrackManager:
 
         ev = Evidence(q, ns - t.last_visible, ns - t.state_since, sum(t.recent))
         self._transition(t, next_state(t.state, ev, self._cfg), frame)
+        if t.state in _VISIBLE:
+            t.seen = t.kf.box
+
+    def _reacquire(self, t, frame, obs):
+        """Candidates: an appearance search around the prediction and the propagator's box,
+        both scored against the look at selection. A clear winner restarts the propagator and
+        the filter there and is returned as the observation; the ID stays."""
+        cfg = self._cfg
+        reach = cfg.search_reach + cfg.search_growth * (frame.capture_ns - t.state_since) / NS_PER_S
+        found = t.look.search(frame, Box(t.kf.box.cx, t.kf.box.cy, t.seen.w, t.seen.h), reach)
+        if obs is not None and (score := t.look.score(frame, obs.box)) is not None:
+            found.append(replace(obs, score=score))
+
+        # Never another track's object (SPEC).
+        held = [o.kf.box for o in self._tracks.values() if o is not t and o.state in _VISIBLE]
+        best = _clear_winner([c for c in found if not any(_center_inside(c.box, b) for b in held)], cfg)
+        if best is None:
+            return None
+
+        t.prop.init(frame, best.box)
+        t.kf = CvKalman(best.box, frame.capture_ns, cfg)
+        return best
 
     def _dedupe(self, frame):
         """One object, one track: a visible pair on one box for same_object_ns keeps the better one."""
@@ -300,6 +337,22 @@ class TrackManager:
             capture_ns=t.kf.t_ns,
             trail=tuple(t.trail),
         )
+
+
+def _clear_winner(candidates, cfg) -> Observation | None:
+    """Best candidate if it looks right and leads every other object's candidate by the margin."""
+    objects = []
+    for c in sorted(candidates, key=lambda c: c.score, reverse=True):
+        if not any(_same_box(c.box, o.box) for o in objects):
+            objects.append(c)
+
+    if not objects or objects[0].score < cfg.good_quality:
+        return None
+
+    if len(objects) > 1 and objects[0].score - objects[1].score < cfg.reacquire_margin:
+        return None
+
+    return objects[0]
 
 
 def _same_box(a: Box, b: Box) -> bool:

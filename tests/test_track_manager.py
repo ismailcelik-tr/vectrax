@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pytest
 
@@ -375,7 +376,6 @@ def test_the_label_weighs_in_when_a_detection_sits_between_two_tracks(right_labe
 
 
 SAME = CFG.same_object_ns // FRAME_NS + 1
-BESIDE = Box(0.6, 0.5, 0.1, 0.1)
 VISIBLE = {S.TRACKING, S.DEGRADED}
 
 
@@ -414,11 +414,198 @@ def test_on_a_tie_the_newer_track_yields():
     assert (snaps[a].state, snaps[b].state) == (S.TRACKING, S.OCCLUDED)
 
 
-def test_a_yielded_track_returns_on_its_own_object():
-    left = CONFIRM + SAME + 2
-    mgr, (_, b) = _two_on([lambda i: BOX, lambda i: BOX if i < left else BESIDE], [lambda i: 0.9, lambda i: 0.8])
-    _run(mgr, 0, left)
 
-    states = [_state(mgr, i, b) for i in range(left, left + 5)]
 
-    assert VISIBLE & set(states)
+# Reacquisition (Phase 4 step 3). Frames carry a textured target so appearance can be scored.
+
+IMG_W, IMG_H, SIDE_PX = 320, 240, 40
+REACQ_CFG = TrackingConfig(confirm_frames=3, occlusion_timeout_ns=NS_PER_S // 2, reacquire_timeout_ns=2 * NS_PER_S)
+REACQUIRING_BY = (REACQ_CFG.occlusion_timeout_ns + NS_PER_S) // FRAME_NS  # searched for 0.5 s
+
+
+def _textures(n, seed=0):
+    rng = np.random.default_rng(seed)
+    background = rng.integers(60, 120, (IMG_H, IMG_W, 3), dtype=np.uint8)
+    patches = []
+    for _ in range(n):
+        noise = cv2.GaussianBlur(rng.integers(0, 256, (SIDE_PX, SIDE_PX, 3), dtype=np.uint8), (0, 0), 3)
+        patches.append(cv2.normalize(noise, None, 0, 255, cv2.NORM_MINMAX))
+
+    return background, patches
+
+
+def _px(x, y):
+    return Box.from_xywh_px(x, y, SIDE_PX, SIDE_PX, IMG_W, IMG_H)
+
+
+class _Scene:
+    """Draws `placed(i)` = [(patch, (x, y))] on frame i."""
+
+    def __init__(self, background, placed):
+        self.background, self.placed = background, placed
+
+    def frame(self, i):
+        img = self.background.copy()
+        for patch, (x, y) in self.placed(i):
+            img[y:y + SIDE_PX, x:x + SIDE_PX] = patch
+
+        return FramePacket(i, "t", i * FRAME_NS, i * FRAME_NS, img, PixelFormat.BGR)
+
+
+class _Relocking(_Moving):
+    """_Moving until re-initialized; then a good score at its new box, or along `path` if it `follows`."""
+
+    def __init__(self, script, path, follows=False):
+        super().__init__(script, path)
+        self.follows = follows
+
+    def update(self, frame):
+        if len(self.inits) == 1:
+            return super().update(frame)
+
+        self.updates += 1
+        if self.follows:
+            self.box = self.path(frame.frame_id)
+
+        return Observation(frame.frame_id, frame.capture_ns, self.box, 0.9, Origin.PROPAGATOR)
+
+
+def _scene_manager(tracks):
+    """tracks: [(script, path[, follows])] per selection; each path(0) is where it is selected."""
+    made = iter(tracks)
+    mgr = TrackManager(REACQ_CFG, lambda: _Relocking(*next(made)), EventBus())
+    return mgr, [mgr.select(path(0)) for _, path, *_ in tracks]
+
+
+def _play(mgr, scene, start, stop, track_id):
+    return [next(s for s in mgr.step(scene.frame(i)) if s.track_id == track_id) for i in range(start, stop)]
+
+
+def _at(box, x, y, px=4):
+    bx, by, _, _ = box.to_xywh_px(IMG_W, IMG_H)
+    return abs(bx - x) <= px and abs(by - y) <= px
+
+
+HOME_PX, AWAY_PX = (140, 100), (220, 140)
+HIDE, BACK = 10, 25
+
+
+def _hidden_then(target, back_at):
+    return lambda i: [] if HIDE <= i < BACK else [(target, HOME_PX if i < HIDE else back_at)]
+
+
+def _lost_propagator():
+    return lambda i: 0.9 if i < HIDE else None, lambda i: _px(*HOME_PX)
+
+
+def test_reacquiring_finds_the_target_where_it_came_back():
+    background, (target,) = _textures(1)
+    scene = _Scene(background, _hidden_then(target, AWAY_PX))
+    mgr, (tid,) = _scene_manager([_lost_propagator()])
+
+    snaps = _play(mgr, scene, 0, BACK + REACQUIRING_BY, tid)
+
+    assert S.REACQUIRING in {s.state for s in snaps}
+    assert snaps[-1].state is S.TRACKING
+    assert _at(snaps[-1].box, *AWAY_PX)
+
+
+def test_two_look_alikes_keep_the_track_reacquiring():
+    background, (target,) = _textures(1)
+
+    def placed(i):
+        return [(target, HOME_PX)] if i < HIDE else [] if i < BACK else [(target, (60, 100)), (target, (220, 100))]
+
+    mgr, (tid,) = _scene_manager([_lost_propagator()])
+
+    snaps = _play(mgr, _Scene(background, placed), 0, BACK + REACQUIRING_BY, tid)
+
+    assert snaps[-1].state is S.REACQUIRING
+
+
+def test_the_look_alike_another_track_holds_is_not_taken():
+    background, (target,) = _textures(1)
+    held_px, free_px = (220, 100), (60, 100)
+
+    def placed(i):
+        own = [(target, HOME_PX)] if i < HIDE else [] if i < BACK else [(target, free_px)]
+        return [(target, held_px), *own]
+
+    holder = (lambda i: 0.9, lambda i: _px(*held_px))
+    mgr, (_, tid) = _scene_manager([holder, _lost_propagator()])
+
+    snaps = _play(mgr, _Scene(background, placed), 0, BACK + REACQUIRING_BY, tid)
+
+    assert snaps[-1].state is S.TRACKING
+    assert _at(snaps[-1].box, *free_px)
+
+
+def test_a_propagator_box_on_background_is_not_reacquired():
+    # phase3_verify2 f372: the propagator sat on a stale box far from the gone phone.
+    background, (target,) = _textures(1)
+    scene = _Scene(background, lambda i: [(target, HOME_PX)] if i < HIDE else [])
+    stale = (lambda i: 0.9 if i < HIDE else 0.5, lambda i: _px(*HOME_PX) if i < HIDE else _px(*AWAY_PX))
+    mgr, (tid,) = _scene_manager([stale])
+
+    snaps = _play(mgr, scene, 0, BACK + REACQUIRING_BY, tid)
+
+    assert snaps[-1].state is S.REACQUIRING
+
+
+def test_the_propagator_box_is_reacquired_when_it_is_on_the_target():
+    # non_coco, fast_motion: the Kalman stopped or overshot, the propagator kept the target.
+    background, (target,) = _textures(1)
+
+    def where(i):
+        return HOME_PX if i < HIDE else (min(HOME_PX[0] + 4 * (i - HIDE), 270), HOME_PX[1])
+
+    scene = _Scene(background, lambda i: [(target, where(i))])
+    dips = (lambda i: 0.9 if i < HIDE else 0.1, lambda i: _px(*where(i)), True)
+    mgr, (tid,) = _scene_manager([dips])
+
+    snaps = _play(mgr, scene, 0, BACK + REACQUIRING_BY, tid)
+
+    assert snaps[-1].state is S.TRACKING
+    assert _at(snaps[-1].box, *where(BACK + REACQUIRING_BY - 1), px=8)
+
+
+def test_an_occluded_track_does_not_take_a_far_box():
+    # Coast long enough for the motion gate to pass anything, still inside the timeout.
+    hidden, back = 5, 18
+    far = Box(0.8, 0.5, 0.1, 0.1)
+    mgr = TrackManager(CFG, lambda: _Moving(lambda i: None if hidden <= i < back else 0.9,
+                                            lambda i: far if i >= back else BOX), EventBus())
+    tid = mgr.select(BOX)
+    _run(mgr, 0, back)
+
+    assert _state(mgr, back, tid) is S.OCCLUDED
+
+
+def test_weak_observations_do_not_hold_a_track_occluded():
+    below_exit = CFG.min_quality + CFG.quality_hysteresis / 2
+    mgr, _, _ = _manager(lambda i: 0.9 if i < 3 else None if i == 3 else below_exit)
+    tid = mgr.select(BOX)
+
+    snaps = _run(mgr, 0, 3 + CFG.occlusion_timeout_ns // FRAME_NS + 2)
+
+    assert snaps[tid].state is S.REACQUIRING
+
+
+def test_a_yielded_track_reacquires_its_own_object():
+    # phase3_verify: one pupil track slid onto the other pupil and yielded.
+    background, (left, right) = _textures(2)
+    left_px, right_px = (60, 100), (180, 100)
+    slide_from, slide_frames = 5, 40
+
+    def slides(i):
+        k = min(max(i - slide_from, 0) / slide_frames, 1.0)
+        return _px(round(right_px[0] + (left_px[0] - right_px[0]) * k), right_px[1])
+
+    scene = _Scene(background, lambda i: [(left, left_px), (right, right_px)])
+    mgr, (_, b) = _scene_manager([(lambda i: 0.9, lambda i: _px(*left_px)), (lambda i: 0.9, slides)])
+
+    snaps = _play(mgr, scene, 0, 150, b)
+
+    assert S.OCCLUDED in {s.state for s in snaps}
+    assert snaps[-1].state is S.TRACKING
+    assert _at(snaps[-1].box, *right_px)

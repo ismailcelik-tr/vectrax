@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Protocol
 
 import cv2
-import numpy as np
 
 from vectrax.frames import FramePacket
+from vectrax.tracking.appearance import patch
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.observation import Observation, Origin
 
@@ -25,10 +25,6 @@ MODELS_DIR = Path(__file__).resolve().parents[3] / "models" / "trackers"
 VIT_MODEL = "vittrack_2023sep.onnx"
 NANO_BACKBONE = "nanotrack_backbone_sim.onnx"
 NANO_HEAD = "nanotrack_head_sim.onnx"
-
-_TEMPLATE_PX = 32
-# Blur so a few pixels of box misalignment do not read as appearance change.
-_SCORE_BLUR_SIGMA = 1.5
 
 
 class Propagator(Protocol):
@@ -60,7 +56,7 @@ class _OpenCvPropagator:
         h, w = img.shape[:2]
         self._tracker = self._create()
         self._tracker.init(img, box.to_xywh_px(w, h))
-        self._template = _patch(img, box.to_xywh_px(w, h))
+        self._template = patch(img, box.to_xywh_px(w, h))
 
     def update(self, frame: FramePacket) -> Observation | None:
         img = self._resize(frame.image)
@@ -69,14 +65,14 @@ class _OpenCvPropagator:
         if not ok:
             return None
 
-        patch = _patch(img, rect)
-        if patch is None:
+        current = patch(img, rect)
+        if current is None:
             return None
 
         if self._score is ScoreSource.NATIVE:
             score = float(self._tracker.getTrackingScore())
         else:
-            score = float(cv2.matchTemplate(patch, self._template, cv2.TM_CCOEFF_NORMED)[0, 0])
+            score = float(cv2.matchTemplate(current, self._template, cv2.TM_CCOEFF_NORMED)[0, 0])
 
         return Observation(
             frame_id=frame.frame_id,
@@ -136,15 +132,3 @@ class NanoPropagator(_OpenCvPropagator):
 
     def _create(self):
         return cv2.TrackerNano.create(self._params)
-
-
-def _patch(img, rect):
-    x, y, w, h = (int(v) for v in rect)
-    x0, y0 = max(x, 0), max(y, 0)
-    x1, y1 = min(x + w, img.shape[1]), min(y + h, img.shape[0])
-    if x1 - x0 < 2 or y1 - y0 < 2:
-        return None
-
-    gray = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
-    small = cv2.resize(gray, (_TEMPLATE_PX, _TEMPLATE_PX), interpolation=cv2.INTER_AREA)
-    return cv2.GaussianBlur(small, (0, 0), _SCORE_BLUR_SIGMA).astype(np.float32)

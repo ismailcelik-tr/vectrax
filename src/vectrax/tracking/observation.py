@@ -12,6 +12,7 @@ class Origin(Enum):
     OPERATOR = "operator"
     PROPAGATOR = "propagator"
     DETECTOR = "detector"
+    SEARCH = "search"  # appearance search while reacquiring
 
 
 @dataclass(frozen=True, slots=True)

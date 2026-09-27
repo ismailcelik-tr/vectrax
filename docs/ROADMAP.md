@@ -174,3 +174,45 @@ lasted 88 frames, just under the 3 s timeout.
   COCO detection (max IoU 0.01 over 23 sampled frames). Needs a
   one-track-per-object rule in TrackManager, and appearance to tell the two
   apart (Phase 4).
+
+## Phase 4 — occlusion and reacquisition (approved 2026-09-27)
+
+Owner's calls:
+- New fixtures, one per scenario (FIXTURES.md): two identical cups, one
+  leaves and returns; a cup hidden longer than 3 s. SAM 2 pre-labels every
+  10th frame, CVAT interpolates, owner reviews.
+- Reacquisition is automatic when one candidate clearly wins; otherwise the
+  track stays REACQUIRING and the UI shows the candidate.
+- OCCLUDED 1 s, then REACQUIRING 5 s, then LOST (PROVISIONAL, tuned on
+  fixtures).
+
+Steps, one commit each, test first:
+- [ ] 0. Metrics first: wrong relock (back on another target or on
+      background) and TrackEval IDSW/IDF1/HOTA; baseline of the current
+      system.
+- [ ] 1. No unplanned re-find: OCCLUDED must not accept a far propagator
+      observation. Regression: phase3_verify2 f372 (~930 px jump). Cause
+      confirmed on replay before the test.
+- [ ] 2. One track per object: two active tracks on one box for long, the
+      lower-quality one drops to OCCLUDED. Regression: pupils in
+      demo_detect and phase3_verify.
+- [ ] 3. REACQUIRING: OCCLUDED → REACQUIRING → TRACKING/LOST. Candidates:
+      matched detections, propagator search in a window growing around the
+      prediction. Never takes an active track's ID; ambiguous stays
+      REACQUIRING. NCC scoring first.
+- [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
+- [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
+      worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.
+- [ ] 6. Phase 3 leftovers: count results older than the 1 s history;
+      detection evidence and label in TrackSnapshot; margin for tied
+      candidates; causes of crossing hijack, exit_reentry false-visible,
+      fast_motion −1 point.
+- [ ] 7. R3a/R3b with reacquisition on, 1–3 targets; owner verifies on
+      camera.
+
+Acceptance: tests green, ruff clean, replay reproduces; fixtures show
+reacquisition; wrong relocks 0 or reported; R3a p95 ≤ 100 ms; owner
+verifies on camera.
+Start (EVALUATION.md, nano_ncc + detection): recoveries 0/6.
+Known cost: step 1 ends the lucky re-find in phase3_verify2; until step 3
+that phone goes LOST.

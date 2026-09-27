@@ -24,9 +24,11 @@ araştırma. v1 hiçbir donanımı hareket ettirmez.
 ## Durum
 
 7 fazın 3.'sü kapandı: tracker'ların yanında bir detector çalışıyor ve bir
-track'in güvenini yükseltebiliyor. Sıradaki Phase 4, occlusion ve yeniden
-bulma (reacquisition): kaybolup geri gelen bir hedef henüz yeniden
-bulunmuyor. Tahmin ve ekranda yönlendirme Phase 5'te gelecek. İlerleme:
+track'in güvenini yükseltebiliyor. Phase 4, occlusion ve yeniden bulma
+(reacquisition), sürüyor: iki track artık aynı nesneyi paylaşmıyor; DINOv2-S
+Re-ID modeliyle yeniden bulma `phase4-reacquire` branch'inde geliştiriliyor.
+O birleşene kadar kaybolup geri gelen bir hedef yeniden bulunmuyor. Tahmin ve
+ekranda yönlendirme Phase 5'te gelecek. İlerleme:
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Nasıl çalışır

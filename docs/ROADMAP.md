@@ -239,6 +239,13 @@ Steps, one commit each, test first:
       detection lift (crossing_targets#2, one at a time, detection on:
       hijack 471 frames, EVALUATION.md). A detection may lift or correct a
       track only if its appearance matches.
+      Owner's call (2026-09-27): DINOv2-S on the worker (Core ML, ANE),
+      never on the tick. Branch progress: embedder (reid/coreml.py) and
+      worker embedding jobs done. Next: TrackManager asks for a reference
+      embedding at selection, sends REACQUIRING candidates every few frames,
+      decides on late cosine scores, and gates detection lift/correction by
+      appearance; then pipeline/CLI wiring and fixture runs (all, and
+      --one-at-a-time: crossing_targets#2 hijack must fall from 471).
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.

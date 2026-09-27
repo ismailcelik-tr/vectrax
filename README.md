@@ -24,8 +24,10 @@ v1 never moves hardware.
 ## Status
 
 Phase 3 of 7 is closed: a detector runs beside the trackers and can raise
-a track's confidence. Next is Phase 4, occlusion and reacquisition: a
-target that disappears and comes back is not re-found yet. Prediction and
+a track's confidence. Phase 4, occlusion and reacquisition, is in progress:
+two tracks no longer share one object, and reacquisition with a DINOv2-S
+Re-ID model is being built on branch `phase4-reacquire`. Until it lands, a
+target that disappears and comes back is not re-found. Prediction and
 on-screen guidance come in Phase 5. Progress: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## How it works

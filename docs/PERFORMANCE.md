@@ -252,7 +252,9 @@ Reading:
 - Batching barely amortizes on any backend: 8 crops cost ~6× one.
 - Core ML on the GPU (and ALL, which picks it) is ~5× slower than ANE for
   this model; cause not examined.
-- At 3 candidates per frame (EVALUATION.md) one scoring costs ~20 ms on
-  ANE: every frame would not fit beside the detector on one worker at
-  30 fps. Cadence is a design choice for ADR-011.
+- A REACQUIRING frame has up to 3 candidates (two search peaks and the
+  propagator's box). 3 crops were not timed; 2 and 4 take 13.2 and 24.6 ms
+  on ANE. Scoring every frame beside the detector (8.3 ms isolated, ~2×
+  live) would not fit one worker's 33 ms at 30 fps. Cadence is a design
+  choice for ADR-011.
 

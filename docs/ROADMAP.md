@@ -235,6 +235,10 @@ Steps, one commit each, test first:
       gained 232 false-visible frames, non_coco fell 47 → 9 %.
       Owner's call (2026-09-27): steps 4 and 5 go first, offline on the
       logged candidates, to pick the scorer; step 3 finishes with it.
+      Also for step 3: a lone track swaps to a look-alike through a
+      detection lift (crossing_targets#2, one at a time, detection on:
+      hijack 471 frames, EVALUATION.md). A detection may lift or correct a
+      track only if its appearance matches.
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.

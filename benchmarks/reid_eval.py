@@ -1,0 +1,270 @@
+"""Which appearance score tells a reacquisition candidate on the target from one elsewhere.
+
+  uv run benchmarks/reid_eval.py --detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage
+
+Fixtures run through the deterministic pipeline with reacquisition watching but never acting, so
+every REACQUIRING frame's candidates are kept. GT labels each candidate: own (center on its
+target), other (on another target), bg (target visible elsewhere), absent (target gone). Each
+scorer compares a candidate with the look at selection, and with a gallery: the selection plus
+earlier TRACKING frames at good quality. Reports ROC AUC (own vs the rest) and own recall at the
+strictest threshold no other candidate reaches. Candidates come from the NCC search and the
+propagator, so a scorer can only re-rank them; proposal recall says how often the target was
+among them at all.
+"""
+
+import argparse
+import json
+import math
+import platform
+import subprocess
+import time
+from collections import defaultdict
+from dataclasses import replace
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+from transformers import AutoModel
+
+from vectrax.detection.coreml import CoreMlDetector
+from vectrax.detection.worker import InferenceWorker
+from vectrax.evaluation.gt import load_mot
+from vectrax.metrics import RunMode
+from vectrax.pipeline import build_file_pipeline
+from vectrax.tracking.appearance import patch
+from vectrax.tracking.config import TrackingConfig
+from vectrax.tracking.geometry import Box
+from vectrax.tracking.propagators import NanoPropagator, ScoreSource
+from vectrax.tracking.state import TrackState
+
+ROOT = Path(__file__).resolve().parent.parent
+FIXTURES = ROOT / "data" / "fixtures"
+DINO_DIR = ROOT / "models" / "reid" / "dinov2-small"
+OUT_DIR = Path(__file__).resolve().parent / "results" / "reid"
+NAMES = ["single_target", "crossing_targets", "near_targets", "occlusion", "exit_reentry",
+         "fast_motion", "non_coco", "low_light"]
+LABELS = ("own", "other", "bg", "absent")
+GALLERY_EVERY = 5  # good TRACKING frames per gallery sample
+CROP_PX = 112  # stored crop side; upscaled for DINOv2
+DINO_PX = 224
+DINO_BATCH = 64
+# ImageNet statistics, as in the model's preprocessor_config.json.
+DINO_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+DINO_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+HIST_BINS = [16, 16]  # hue, saturation; value left out for lighting
+HIST_RANGES = [0, 180, 0, 256]
+
+
+def _git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=False).stdout.strip()
+
+
+def _crop(img, box: Box):
+    h, w = img.shape[:2]
+    x, y, bw, bh = box.to_xywh_px(w, h)
+    x0, y0, x1, y1 = max(x, 0), max(y, 0), min(x + bw, w), min(y + bh, h)
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return None
+
+    return cv2.resize(img[y0:y1, x0:x1], (CROP_PX, CROP_PX), interpolation=cv2.INTER_AREA)
+
+
+def _label(box: Box, gid, gt, f, w, h):
+    cx, cy = box.cx * w, box.cy * h
+
+    def on(g):
+        return g[0] <= cx <= g[0] + g[2] and g[1] <= cy <= g[1] + g[3]
+
+    own = gt.tracks[gid].get(f)
+    if own is not None and on(own.box):
+        return "own"
+
+    if any(f in boxes and on(boxes[f].box) for o, boxes in gt.tracks.items() if o != gid):
+        return "other"
+
+    return "absent" if own is None else "bg"
+
+
+def _collect(name, cfg, detect):
+    video = FIXTURES / f"{name}.mp4"
+    gt = load_mot(video.with_suffix("").with_suffix(".gt.zip"), json.loads(video.with_suffix(".json").read_text())["frames"])
+    starts = {gid: min(boxes) for gid, boxes in gt.tracks.items()}
+    worker = InferenceWorker(CoreMlDetector(detect), RunMode.DETERMINISTIC) if detect else None
+    pipe = build_file_pipeline(video, cfg, propagator_factory=lambda: NanoPropagator(score=ScoreSource.NCC),
+                               worker=worker)
+    w, h = pipe.frame_size
+    track_of, good = {}, defaultdict(int)
+    refs = {gid: [] for gid in gt.tracks}  # crops, selection first
+    cands, frames = [], []
+    try:
+        while (frame := pipe.read()) is not None:
+            f = frame.frame_id
+            for gid, first in starts.items():
+                if f == first:
+                    box = Box.from_xywh_px(*gt.tracks[gid][first].box, w, h)
+                    track_of[gid] = pipe.select(box)
+                    refs[gid].append(_crop(frame.image, box))  # GT box at selection: inside the image
+
+            snaps = {s.track_id: s for s in pipe.process(frame).tracks}
+            for gid, tid in track_of.items():
+                s = snaps.get(tid)
+                if s is None:
+                    continue
+
+                q = s.quality.combined(cfg)
+                if s.state is TrackState.TRACKING and q is not None and q >= cfg.good_quality:
+                    good[gid] += 1
+                    if good[gid] % GALLERY_EVERY == 0 and (c := _crop(frame.image, s.box)) is not None:
+                        refs[gid].append(c)
+
+                if s.state is not TrackState.REACQUIRING:
+                    continue
+
+                labels = []
+                for c in s.candidates:
+                    crop = _crop(frame.image, c.box)
+                    if crop is None:
+                        continue
+
+                    labels.append(_label(c.box, gid, gt, f, w, h))
+                    cands.append({"fixture": name, "gid": gid, "frame": f, "origin": c.origin.value,
+                                  "label": labels[-1], "crop": crop, "refs": len(refs[gid])})
+
+                frames.append({"visible": f in gt.tracks[gid], "proposed": "own" in labels})
+    finally:
+        pipe.close()
+
+    return refs, cands, frames
+
+
+def _ncc(crop):
+    return patch(crop, (0, 0, CROP_PX, CROP_PX))
+
+
+def _ncc_sim(a, b):
+    return float(cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED)[0, 0])
+
+
+def _hist(crop):
+    hist = cv2.calcHist([cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)], [0, 1], None, HIST_BINS, HIST_RANGES)
+    return cv2.normalize(hist, None, 1, 0, cv2.NORM_L1)
+
+
+def _hist_sim(a, b):
+    return 1.0 - float(cv2.compareHist(a, b, cv2.HISTCMP_BHATTACHARYYA))
+
+
+def _dino_all(crops):
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    model = AutoModel.from_pretrained(DINO_DIR).eval().to(device)
+    out = []
+    with torch.no_grad():
+        for i in range(0, len(crops), DINO_BATCH):
+            rgb = [cv2.resize(c, (DINO_PX, DINO_PX), interpolation=cv2.INTER_CUBIC)[:, :, ::-1] for c in crops[i:i + DINO_BATCH]]
+            x = (np.stack(rgb).astype(np.float32) / 255.0 - DINO_MEAN) / DINO_STD
+            emb = model(pixel_values=torch.from_numpy(x).permute(0, 3, 1, 2).to(device)).pooler_output
+            out.extend(torch.nn.functional.normalize(emb, dim=1).cpu().numpy())
+
+    return out
+
+
+def _dino_sim(a, b):
+    return float(a @ b)
+
+
+def _auc(pos, neg):
+    """P(a random own candidate outscores a random other one); ties count half."""
+    if not pos or not neg:
+        return None
+
+    neg = np.sort(np.asarray(neg))
+    pos = np.asarray(pos)
+    below = np.searchsorted(neg, pos, side="left")
+    ties = np.searchsorted(neg, pos, side="right") - below
+    return float((below + ties / 2).sum() / (len(pos) * len(neg)))
+
+
+def _recall_clean(pos, neg):
+    """Own recall at the strictest threshold no other candidate reaches."""
+    if not pos:
+        return None
+
+    top = max(neg) if neg else -math.inf
+    return float(np.mean(np.asarray(pos) > top))
+
+
+def _fmt(v):
+    return "   -" if v is None else f"{v:.2f}"
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--fixtures", default=",".join(NAMES))
+    p.add_argument("--detect", help="Core ML detector package, as in the live pipeline")
+    args = p.parse_args()
+
+    # Watch candidates, never act on them: no candidate leads anything by an infinite margin.
+    cfg = replace(TrackingConfig(), reacquire_margin=math.inf)
+    refs, cands, frames = {}, [], []
+    for name in args.fixtures.split(","):
+        r, c, f = _collect(name, cfg, Path(args.detect) if args.detect else None)
+        refs.update({(name, gid): crops for gid, crops in r.items()})
+        cands += c
+        frames += f
+
+    order = [(k, i) for k, crops in refs.items() for i in range(len(crops))]
+    ref_crops = [refs[k][i] for k, i in order]
+    all_crops = [c["crop"] for c in cands] + ref_crops
+    dino = _dino_all(all_crops)
+    features = {
+        "ncc": [_ncc(c) for c in all_crops],
+        "hist": [_hist(c) for c in all_crops],
+        "dino": dino,
+    }
+    sims = {"ncc": _ncc_sim, "hist": _hist_sim, "dino": _dino_sim}
+    ref_at = {k_i: len(cands) + n for n, k_i in enumerate(order)}
+
+    scores = {}
+    for scorer, feat in features.items():
+        for mode in ("selection", "gallery"):
+            key = f"{scorer}/{mode}"
+            scores[key] = []
+            for n, c in enumerate(cands):
+                k = (c["fixture"], c["gid"])
+                count = 1 if mode == "selection" else c["refs"]
+                scores[key].append(max(sims[scorer](feat[n], feat[ref_at[(k, i)]]) for i in range(count)))
+
+    report = {"git_sha": _git("rev-parse", "--short", "HEAD"),
+              "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+              "macos": platform.mac_ver()[0], "detector": args.detect, "fixtures": args.fixtures.split(","),
+              "counts": {lb: sum(c["label"] == lb for c in cands) for lb in LABELS},
+              "proposal_recall": None, "scorers": {}}
+    seen = [f for f in frames if f["visible"]]
+    report["proposal_recall"] = sum(f["proposed"] for f in seen) / len(seen) if seen else None
+
+    print(f"candidates {report['counts']}, REACQUIRING frames with the target visible: {len(seen)}, "
+          f"own among candidates: {report['proposal_recall']}")
+    print(f"\n{'scorer':16s} {'AUC':>5s} {'vs bg':>6s} {'vs absent':>9s} {'vs other':>8s} {'clean recall':>12s}")
+    for key, vals in scores.items():
+        by = defaultdict(list)
+        for c, v in zip(cands, vals, strict=True):
+            by[c["label"]].append(v)
+
+        rest = by["other"] + by["bg"] + by["absent"]
+        row = {"auc": _auc(by["own"], rest), "auc_bg": _auc(by["own"], by["bg"]),
+               "auc_absent": _auc(by["own"], by["absent"]), "auc_other": _auc(by["own"], by["other"]),
+               "clean_recall": _recall_clean(by["own"], rest),
+               "scores": {lb: [round(v, 4) for v in by[lb]] for lb in LABELS}}
+        report["scorers"][key] = row
+        print(f"{key:16s} {_fmt(row['auc']):>5s} {_fmt(row['auc_bg']):>6s} {_fmt(row['auc_absent']):>9s} "
+              f"{_fmt(row['auc_other']):>8s} {_fmt(row['clean_recall']):>12s}")
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_reid.json"
+    out.write_text(json.dumps(report))
+    print(f"\nSaved {out}")
+
+
+if __name__ == "__main__":
+    main()

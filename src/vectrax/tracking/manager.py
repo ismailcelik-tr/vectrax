@@ -354,7 +354,8 @@ def _clear_winner(candidates, cfg) -> Observation | None:
     if not objects or objects[0].score < cfg.good_quality:
         return None
 
-    if len(objects) > 1 and objects[0].score - objects[1].score < cfg.reacquire_margin:
+    runner_up = objects[1].score if len(objects) > 1 else 0.0
+    if objects[0].score - runner_up < cfg.reacquire_margin:
         return None
 
     return objects[0]

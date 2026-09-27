@@ -1,3 +1,6 @@
+import math
+from dataclasses import replace
+
 import cv2
 import numpy as np
 import pytest
@@ -622,3 +625,16 @@ def test_a_reacquiring_snapshot_carries_its_candidates():
     assert snaps[-1].state is S.REACQUIRING
     assert sum(c.origin is Origin.SEARCH and c.score > 0.9 for c in snaps[-1].candidates) == 2
     assert all(s.candidates == () for s in snaps if s.state is not S.REACQUIRING)
+
+
+def test_a_margin_above_any_score_turns_reacquisition_off():
+    # Lets benchmarks watch the candidates without acting on them.
+    background, (target,) = _textures(1)
+    scene = _Scene(background, _hidden_then(target, AWAY_PX))
+    mgr = TrackManager(replace(REACQ_CFG, reacquire_margin=math.inf), lambda: _Relocking(*_lost_propagator()), EventBus())
+    tid = mgr.select(_px(*HOME_PX))
+
+    snaps = _play(mgr, scene, 0, BACK + REACQUIRING_BY, tid)
+
+    assert snaps[-1].state is S.REACQUIRING
+    assert snaps[-1].candidates

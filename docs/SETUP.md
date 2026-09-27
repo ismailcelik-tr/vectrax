@@ -30,6 +30,7 @@ Model weights in `models/` (git-ignored):
 | `detectors/yolo11n.pt` (5.6 MB) | same | `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1` |
 | `detectors/rf-detr-nano.pth` (366 MB) | storage.googleapis.com/rfdetr/nano_coco/checkpoint_best_regular.pth (Apache-2.0; MD5 matches rfdetr 1.10.1) | `d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d` |
 | `detectors/dfine-nano-coco/` (15 MB) | huggingface.co/ustc-community/dfine-nano-coco @ 066438d (Apache-2.0) | `19e06bdc873da819920a8d373b879721a5b9759d822f8213220bb09abbdab58b` (model.safetensors) |
+| `reid/dinov2-small/` (88 MB) | huggingface.co/facebook/dinov2-small @ ed25f3a (Apache-2.0, card and github.com/facebookresearch/dinov2 LICENSE) | `ae1e99fcefd534ed978cdeb8326f08030c96e28b7a81ffcbc98a857c84d14be1` (model.safetensors) |
 | `sam2/sam2.1_hiera_small.pt` (184 MB) | dl.fbaipublicfiles.com/segment_anything_2/092824/ | `6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38` |
 
 ## Outside the project

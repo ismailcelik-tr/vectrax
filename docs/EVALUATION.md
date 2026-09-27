@@ -276,7 +276,28 @@ Reading:
   wrong in 2–3 spells at the same rule.
 - Proposals limit what any scorer can do: the second occlusion spell never
   proposed the cup, exit_reentry did in 13 of 149 frames.
-- None of these fixtures has a look-alike; twin_reentry will test that.
+- crossing_targets and near_targets hold two similar cups, but each is
+  tracked, so candidates on the other cup were dropped as held (other: 3).
+
+Look-alike nobody tracks: `uv run benchmarks/reid_eval.py --fixtures
+crossing_targets,near_targets --one-at-a-time` (no detection: with it the
+lone track swaps instead of reacquiring, see "One target at a time").
+Raw: `benchmarks/results/reid/20260927-145035_reid.json`, git fc67170, clean.
+1341 candidates: own 254, other (the look-alike cup) 188,
+bg 899; 3 spells.
+
+| Scorer / reference | AUC | vs look-alike | spells own / wrong / none |
+|---|---|---|---|
+| ncc/selection | 0.68 | 0.83 | 1 / 1 / 1 |
+| ncc/gallery | 0.66 | 0.81 | 1 / 1 / 1 |
+| hist/selection | 0.85 | 0.74 | 2 / 0 / 1 |
+| hist/gallery | 0.81 | 0.63 | 2 / 1 / 0 |
+| dino/selection | 0.98 | 0.90 | 3 / 0 / 0 |
+| dino/gallery | 0.97 | 0.89 | 2 / 1 / 0 |
+
+DINOv2-S against the selection picks its own cup in all 3 spells; against
+the look-alike its AUC is 0.90. The cups are similar, not identical;
+twin_reentry (identical cups) remains the hard case.
 
 ## One target at a time (Phase 4, 2026-09-27, git 0cf7cff)
 

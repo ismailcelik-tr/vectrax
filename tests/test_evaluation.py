@@ -139,35 +139,45 @@ def test_frames_before_selection_are_skipped():
     assert r.success_rate == 1.0
 
 
-def test_run_fixture_on_synthetic_clip(tmp_path):
+CLIP_FRAMES = 30
+
+
+def _synthetic_clip(tmp_path, rows):
+    """rows: y of each target's lane; target k moves right along its lane."""
     import json
 
     import cv2
     import numpy as np
 
+    w, h, side = 320, 240, 40
+    rng = np.random.default_rng(5)
+    background = rng.integers(60, 120, (h, w, 3), dtype=np.uint8)
+    patches = [cv2.normalize(cv2.GaussianBlur(rng.integers(0, 256, (side, side, 3), dtype=np.uint8), (0, 0), 3),
+                             None, 0, 255, cv2.NORM_MINMAX) for _ in rows]
+    writer = cv2.VideoWriter(str(tmp_path / "clip.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), 30, (w, h))
+    lines = []
+    for i in range(CLIP_FRAMES):
+        img = background.copy()
+        x = 40 + 3 * i
+        for k, (y, patch) in enumerate(zip(rows, patches, strict=True), start=1):
+            img[y:y + side, x:x + side] = patch
+            lines.append(f"{i + 1},{k},{x},{y},{side},{side},1,1,1.0")
+
+        writer.write(img)
+
+    writer.release()
+    (tmp_path / "clip.json").write_text(json.dumps({"frames": CLIP_FRAMES, "stamps": [
+        {"capture_ns": i * 33_333_333, "arrival_ns": i * 33_333_333} for i in range(CLIP_FRAMES)]}))
+    _zip(tmp_path, lines).rename(tmp_path / "clip.gt.zip")
+    return tmp_path / "clip.mp4"
+
+
+def test_run_fixture_on_synthetic_clip(tmp_path):
     from vectrax.evaluation.runner import run_fixture
     from vectrax.tracking.propagators import CsrtPropagator
 
-    w, h, side, n = 320, 240, 40, 30
-    rng = np.random.default_rng(5)
-    background = rng.integers(60, 120, (h, w, 3), dtype=np.uint8)
-    patch = cv2.normalize(cv2.GaussianBlur(rng.integers(0, 256, (side, side, 3), dtype=np.uint8), (0, 0), 3),
-                          None, 0, 255, cv2.NORM_MINMAX)
-    writer = cv2.VideoWriter(str(tmp_path / "clip.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), 30, (w, h))
-    lines = []
-    for i in range(n):
-        img = background.copy()
-        x = 40 + 3 * i
-        img[100:100 + side, x:x + side] = patch
-        writer.write(img)
-        lines.append(f"{i + 1},1,{x},100,{side},{side},1,1,1.0")
-
-    writer.release()
-    (tmp_path / "clip.json").write_text(json.dumps({"frames": n, "stamps": [
-        {"capture_ns": i * 33_333_333, "arrival_ns": i * 33_333_333} for i in range(n)]}))
-    _zip(tmp_path, lines).rename(tmp_path / "clip.gt.zip")
-
-    result = run_fixture(tmp_path / "clip.mp4", CsrtPropagator)
+    n = CLIP_FRAMES
+    result = run_fixture(_synthetic_clip(tmp_path, [100]), CsrtPropagator)
 
     track = result.tracks[1]
     assert track.frames_scored == n
@@ -239,3 +249,14 @@ def test_hidden_tracks_are_not_detections():
     track = [PredBox(S.TRACKING, BOX)] * 2 + [PredBox(S.OCCLUDED, BOX)] * 2
 
     assert identity_scores(gt, {1: track})["idf1"] == pytest.approx(2 / 3)
+
+
+def test_run_fixture_can_select_one_target(tmp_path):
+    # With one target selected, the others are look-alikes nobody tracks.
+    from vectrax.evaluation.runner import run_fixture
+    from vectrax.tracking.propagators import CsrtPropagator
+
+    result = run_fixture(_synthetic_clip(tmp_path, [40, 160]), CsrtPropagator, only=2)
+
+    assert set(result.tracks) == {2}
+    assert result.tracks[2].success_rate > 0.9

@@ -609,3 +609,16 @@ def test_a_yielded_track_reacquires_its_own_object():
     assert S.OCCLUDED in {s.state for s in snaps}
     assert snaps[-1].state is S.TRACKING
     assert _at(snaps[-1].box, *right_px)
+
+
+def test_a_reacquiring_snapshot_carries_its_candidates():
+    background, (target,) = _textures(1)
+    twins = [(target, (60, 100)), (target, (220, 100))]
+    scene = _Scene(background, lambda i: [(target, HOME_PX)] if i < HIDE else twins)
+    mgr, (tid,) = _scene_manager([_lost_propagator()])
+
+    snaps = _play(mgr, scene, 0, BACK + REACQUIRING_BY, tid)
+
+    assert snaps[-1].state is S.REACQUIRING
+    assert sum(c.origin is Origin.SEARCH and c.score > 0.9 for c in snaps[-1].candidates) == 2
+    assert all(s.candidates == () for s in snaps if s.state is not S.REACQUIRING)

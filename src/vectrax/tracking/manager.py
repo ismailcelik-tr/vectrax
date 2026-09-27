@@ -55,6 +55,7 @@ class TrackSnapshot:
     frame_id: int
     capture_ns: int
     trail: tuple[tuple[float, float], ...]
+    candidates: tuple[Observation, ...] = ()  # REACQUIRING: what was scored this frame
 
 
 class _Op(Enum):
@@ -81,6 +82,7 @@ class _Track:
         self.yields_to: int | None = None  # track that keeps the object both sat on
         self.look: Appearance | None = None  # at selection; scores reacquisition candidates
         self.seen: Box | None = None  # last box while visible; sizes the search
+        self.candidates: tuple[Observation, ...] = ()
         self.trail: deque[tuple[float, float]] = deque(maxlen=TRAIL_LEN)
 
 
@@ -227,6 +229,7 @@ class TrackManager:
             elif obs is not None:
                 t.yields_to = None
 
+        t.candidates = ()
         if t.state is TrackState.REACQUIRING:
             obs = self._reacquire(t, frame, obs)
         elif t.state is TrackState.OCCLUDED and obs is not None and not _center_inside(obs.box, t.kf.box):
@@ -279,7 +282,8 @@ class TrackManager:
 
         # Never another track's object (SPEC).
         held = [o.kf.box for o in self._tracks.values() if o is not t and o.state in _VISIBLE]
-        best = _clear_winner([c for c in found if not any(_center_inside(c.box, b) for b in held)], cfg)
+        t.candidates = tuple(c for c in found if not any(_center_inside(c.box, b) for b in held))
+        best = _clear_winner(t.candidates, cfg)
         if best is None:
             return None
 
@@ -336,6 +340,7 @@ class TrackManager:
             frame_id=t.frame_id,
             capture_ns=t.kf.t_ns,
             trail=tuple(t.trail),
+            candidates=t.candidates,
         )
 
 

@@ -324,3 +324,61 @@ Reading:
 - Detection still carries lone tracks: near_targets#2 goes from 4 to 100 %.
   A lift needs an identity check, not removal.
 
+
+## Re-ID in the loop (Phase 4 step 3, 2026-10-03)
+
+Branch phase4-reacquire. Command: `uv run benchmarks/tracking_eval.py
+--propagator nano_ncc [--detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage]
+[--reid models/reid/exported/dinov2s_fp16.mlpackage] [--one-at-a-time]`.
+Clean trees. DINOv2-S against the selection, reid_min 0.6, margin 0.1,
+candidates every 3 frames (PROVISIONAL).
+
+- base: Phase 4 baseline, detection on (`20260927-133724_nano_ncc_detect.json`, def06af;
+  one at a time `20260927-145404_nano_ncc_detect_one.json`, 0cf7cff).
+- abs: detection lifts if cosine ≥ reid_min (`20261003-180157_nano_ncc_detect_reid.json`,
+  `20261003-180347_nano_ncc_detect_reid_one.json`, 08c9c6f).
+- rel: detection lifts only as the clear winner among the frame's detections
+  of its class (`20261003-210207_nano_ncc_detect_reid.json`,
+  `20261003-210351_nano_ncc_detect_reid_one.json`, 464a9ed).
+- reid only: no detection (`20261003-180440_nano_ncc_reid.json`,
+  `20261003-180517_nano_ncc_reid_one.json`, 4b893f3).
+- off: no detection, no Re-ID (`20261003-175934_nano_ncc.json`,
+  `20261003-180000_nano_ncc_one.json`, 08c9c6f).
+
+Success % (hijack frames, wrong relocks):
+
+| Fixture | base | abs | rel | reid only | off |
+|---|---|---|---|---|---|
+| single_target | 100 | 100 | 100 | 93 | 93 |
+| crossing_targets | 55 (3, 0) | 64 (61, 5) | 62 (51, 6) | 40 (18, 10) | 28 (0, 3) |
+| near_targets | 100 | 96 | 93 | 64 | 50 |
+| occlusion | 9 | 48 (0, 1) | 48 (0, 1) | 26 (0, 1) | 9 |
+| exit_reentry | 37 | 94 | 94 | 36 | 36 |
+| fast_motion | 19 (0, 10) | 24 | 24 | 14 | 12 |
+| non_coco | 47 (0, 2) | 36 (0, 2) | 36 (0, 2) | 36 (0, 2) | 9 |
+| low_light | 100 | 93 | 93 | 91 | 46 |
+| crossing_targets#1 | 95 (3, 0) | 69 (72, 1) | 60 (61, 4) | 48 (0, 7) | — |
+| crossing_targets#2 | 15 (471, 2) | 29 (291, 7) | 37 (132, 7) | 25 (42, 5) | — |
+| near_targets#2 | 100 | 92 | 60 | 31 | — |
+
+Recoveries, detection on: base 0 of 6, abs and rel 6 of 6 (occlusion 6,
+53, 21 frames; exit_reentry 5, 5; crossing_targets 93–95). IDSW on
+crossing_targets: base 1, abs 5, rel 4.
+
+Reading:
+- Re-ID brings targets back: occlusion 9 → 48 %, exit_reentry 37 → 94 %;
+  fast_motion's 10 wrong relocks fall to 0.
+- Look-alike cups are not separated by a fixed cosine threshold. In
+  crossing_targets the other cup's detections scored about as high
+  against the selection as the own cup's (scratch diagnostic, not kept);
+  with abs each crossing hijack began with such a lift out of OCCLUDED,
+  one with a REACQUIRING win on the propagator's box over the other cup.
+- rel ranks the frame's look-alikes instead: crossing_targets#2 hijack
+  291 → 132. Cost: near_targets#2 92 → 60 %; its two cups score close, so
+  neither lift wins and the track sits OCCLUDED (122 frames vs 45).
+- Remaining crossing hijack not traced after rel. Rank cannot help when
+  only the other cup is detected, nor with REACQUIRING's propagator box.
+- non_coco 47 → 36 %, low_light 100 → 93 %, near_targets 100 → 93 %:
+  not examined. Without detection, Re-ID recovers most of what removing
+  the propagator's own relock cost (non_coco 9 → 36 %, low_light 46 → 91 %).
+- Thresholds stay PROVISIONAL until twin_reentry (owner's call).

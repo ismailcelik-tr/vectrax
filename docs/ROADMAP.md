@@ -246,6 +246,13 @@ Steps, one commit each, test first:
       decides on late cosine scores, and gates detection lift/correction by
       appearance; then pipeline/CLI wiring and fixture runs (all, and
       --one-at-a-time: crossing_targets#2 hijack must fall from 471).
+      Done (2026-10-03): late cosine decisions, embedded detections as
+      candidates, detection lift as the clear winner among the frame's
+      look-alikes, Re-ID with or without a detector, --reid. EVALUATION.md
+      "Re-ID in the loop": recoveries 0/6 → 6/6, crossing_targets#2 hijack
+      471 → 132; near_targets#2 100 → 60 %, non_coco 47 → 36 %. Open:
+      remaining crossing hijack, those two regressions, phase3_verify2
+      f372 replay, R3a/R3b with Re-ID, ADR-011, UI candidate.
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.

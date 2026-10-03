@@ -1,0 +1,314 @@
+{
+  "propagator": "nano_ncc",
+  "detector": "models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage",
+  "reid": "models/reid/exported/dinov2s_fp16.mlpackage",
+  "one_at_a_time": true,
+  "git_sha": "08c9c6f",
+  "git_dirty": false,
+  "macos": "27.0.1",
+  "fixtures": [
+    {
+      "fixture": "single_target",
+      "success": 1.0,
+      "on_target": 1.0,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 0,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 1.0,
+      "hota": 0.7148239917575415,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.186,
+      "states": {
+        "visible->degraded": 2,
+        "visible->initializing": 2,
+        "visible->tracking": 596
+      }
+    },
+    {
+      "fixture": "crossing_targets#1",
+      "success": 0.6916666666666667,
+      "on_target": 0.735,
+      "false_visible": 0,
+      "hijack_frames": 72,
+      "relocks": 6,
+      "wrong_relocks": 1,
+      "wrong_relock_frames": [
+        [
+          467,
+          "other"
+        ]
+      ],
+      "idsw": 0,
+      "idf1": 0.7464028776978417,
+      "hota": 0.4661520579707556,
+      "recoveries": [],
+      "partial_as_degraded": 0.0,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.475,
+      "states": {
+        "partial->tracking": 11,
+        "visible->degraded": 8,
+        "visible->initializing": 2,
+        "visible->occluded": 44,
+        "visible->reacquiring": 44,
+        "visible->tracking": 491
+      }
+    },
+    {
+      "fixture": "crossing_targets#2",
+      "success": 0.28983050847457625,
+      "on_target": 0.29491525423728815,
+      "false_visible": 0,
+      "hijack_frames": 291,
+      "relocks": 8,
+      "wrong_relocks": 7,
+      "wrong_relock_frames": [
+        [
+          89,
+          "other"
+        ],
+        [
+          135,
+          "other"
+        ],
+        [
+          203,
+          "other"
+        ],
+        [
+          370,
+          "other"
+        ],
+        [
+          451,
+          "other"
+        ],
+        [
+          485,
+          "other"
+        ],
+        [
+          581,
+          "other"
+        ]
+      ],
+      "idsw": 0,
+      "idf1": 0.32082551594746717,
+      "hota": 0.17312085131364816,
+      "recoveries": [
+        227
+      ],
+      "partial_as_degraded": 0.06923076923076923,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 3.7,
+      "states": {
+        "absent->occluded": 10,
+        "partial->degraded": 9,
+        "partial->occluded": 18,
+        "partial->tracking": 103,
+        "visible->degraded": 13,
+        "visible->initializing": 2,
+        "visible->occluded": 88,
+        "visible->reacquiring": 8,
+        "visible->tracking": 349
+      }
+    },
+    {
+      "fixture": "near_targets#1",
+      "success": 0.9933333333333333,
+      "on_target": 0.995,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 0,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.9933333333333333,
+      "hota": 0.7907890908705303,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.743,
+      "states": {
+        "visible->initializing": 2,
+        "visible->tracking": 598
+      }
+    },
+    {
+      "fixture": "near_targets#2",
+      "success": 0.925,
+      "on_target": 0.925,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 5,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.961038961038961,
+      "hota": 0.8102608792955186,
+      "recoveries": [],
+      "partial_as_degraded": 0.0,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.406,
+      "states": {
+        "partial->initializing": 2,
+        "partial->tracking": 8,
+        "visible->occluded": 45,
+        "visible->tracking": 545
+      }
+    },
+    {
+      "fixture": "occlusion",
+      "success": 0.48314606741573035,
+      "on_target": 0.5056179775280899,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 8,
+      "wrong_relocks": 1,
+      "wrong_relock_frames": [
+        [
+          275,
+          "background"
+        ]
+      ],
+      "idsw": 0,
+      "idf1": 0.636094674556213,
+      "hota": 0.36492553616281387,
+      "recoveries": [
+        6,
+        53,
+        21
+      ],
+      "partial_as_degraded": 0.02702702702702703,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 4.604,
+      "states": {
+        "absent->occluded": 81,
+        "absent->reacquiring": 225,
+        "partial->degraded": 2,
+        "partial->occluded": 21,
+        "partial->reacquiring": 49,
+        "partial->tracking": 2,
+        "visible->degraded": 10,
+        "visible->initializing": 2,
+        "visible->occluded": 106,
+        "visible->reacquiring": 38,
+        "visible->tracking": 215
+      }
+    },
+    {
+      "fixture": "exit_reentry",
+      "success": 0.9382422802850356,
+      "on_target": 0.9477434679334917,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 2,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.9610705596107056,
+      "hota": 0.8269173767177365,
+      "recoveries": [
+        5,
+        5
+      ],
+      "partial_as_degraded": null,
+      "absent_as_hidden": 1.0,
+      "track_ms_p50": 5.306,
+      "states": {
+        "absent->occluded": 48,
+        "absent->reacquiring": 282,
+        "visible->initializing": 2,
+        "visible->occluded": 10,
+        "visible->reacquiring": 10,
+        "visible->tracking": 399
+      }
+    },
+    {
+      "fixture": "fast_motion",
+      "success": 0.2394678492239468,
+      "on_target": 0.25942350332594233,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 10,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.375,
+      "hota": 0.19211200442813847,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.519,
+      "states": {
+        "visible->degraded": 7,
+        "visible->initializing": 2,
+        "visible->occluded": 204,
+        "visible->reacquiring": 122,
+        "visible->tracking": 116
+      }
+    },
+    {
+      "fixture": "non_coco",
+      "success": 0.355,
+      "on_target": 0.5766666666666667,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 11,
+      "wrong_relocks": 2,
+      "wrong_relock_frames": [
+        [
+          334,
+          "background"
+        ],
+        [
+          355,
+          "background"
+        ]
+      ],
+      "idsw": 0,
+      "idf1": 0.4382716049382716,
+      "hota": 0.2964516413089088,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.619,
+      "states": {
+        "visible->degraded": 63,
+        "visible->initializing": 2,
+        "visible->occluded": 183,
+        "visible->reacquiring": 45,
+        "visible->tracking": 307
+      }
+    },
+    {
+      "fixture": "low_light",
+      "success": 0.9284525790349417,
+      "on_target": 0.9284525790349417,
+      "false_visible": 0,
+      "hijack_frames": 0,
+      "relocks": 6,
+      "wrong_relocks": 0,
+      "wrong_relock_frames": [],
+      "idsw": 0,
+      "idf1": 0.9628990509059534,
+      "hota": 0.7724398365187684,
+      "recoveries": [],
+      "partial_as_degraded": null,
+      "absent_as_hidden": null,
+      "track_ms_p50": 3.264,
+      "states": {
+        "visible->degraded": 75,
+        "visible->initializing": 2,
+        "visible->occluded": 41,
+        "visible->reacquiring": 2,
+        "visible->tracking": 481
+      }
+    }
+  ]
+}

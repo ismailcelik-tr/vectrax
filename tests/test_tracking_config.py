@@ -23,6 +23,9 @@ def test_defaults_are_valid():
     {"detection_hold_ns": 0},
     {"same_object_ns": 0},
     {"reacquire_timeout_ns": 0},
+    {"reid_min": 1.1},
+    {"reid_min": -0.1},
+    {"reid_every": 0},
 ])
 def test_invalid_config_rejected(kwargs):
     with pytest.raises(ValueError):

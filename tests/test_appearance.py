@@ -46,14 +46,6 @@ def scene():
     return background, target, other, look
 
 
-def test_score_is_high_on_the_target_and_low_elsewhere(scene):
-    background, target, other, look = scene
-    later = _frame(background, [(target, (200, 60)), (other, HOME)])
-
-    assert look.score(later, _box(200, 60)) > 0.9
-    assert look.score(later, _box(*HOME)) < 0.5
-
-
 def test_search_finds_the_target_inside_the_window(scene):
     background, target, _, look = scene
     later = _frame(background, [(target, (150, 120))], frame_id=7)
@@ -83,8 +75,3 @@ def test_search_reports_a_twin_as_the_runner_up(scene):
     assert {(round(c.box.cx * W), round(c.box.cy * H)) for c in found[:2]} == {(140, 120), (240, 120)}
     assert min(c.score for c in found[:2]) > 0.9
 
-
-def test_a_box_off_the_image_has_no_score(scene):
-    background, target, _, look = scene
-
-    assert look.score(_frame(background, [(target, HOME)]), Box(1.4, 0.5, 0.1, 0.1)) is None

@@ -6,11 +6,13 @@ of the next step, so every change is tied to a frame and replays identically.
 
 import threading
 from collections import deque
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass, replace
 from enum import Enum, auto
 from itertools import combinations
+
+import numpy as np
 
 from vectrax.events import Event, EventBus, EventType
 from vectrax.frames import FramePacket
@@ -64,6 +66,14 @@ class _Op(Enum):
     REMOVE = auto()
 
 
+@dataclass(frozen=True, slots=True)
+class _Ask:
+    """Embedding request key. `init` voids answers from before a reselect."""
+    track_id: int
+    init: int
+    candidate: Observation | None = None  # None: the reference
+
+
 class _Track:
     def __init__(self, track_id: int):
         self.id = track_id
@@ -80,7 +90,10 @@ class _Track:
         self.detected_ns: int | None = None  # capture_ns of the last frame a detection matched
         self.correction: Box | None = None  # matched detection, carried to the current frame
         self.yields_to: int | None = None  # track that keeps the object both sat on
-        self.look: Appearance | None = None  # at selection; scores reacquisition candidates
+        self.look: Appearance | None = None  # at selection; proposes reacquisition candidates
+        self.init = 0
+        self.reference: np.ndarray | None = None  # embedding at selection
+        self.scored: list[Observation] = []  # candidates whose embeddings arrived this step
         self.seen: Box | None = None  # last box while visible; sizes the search
         self.candidates: tuple[Observation, ...] = ()
         self.trail: deque[tuple[float, float]] = deque(maxlen=TRAIL_LEN)
@@ -102,6 +115,7 @@ class TrackManager:
         self._next_id = 1
         self._history = TrackHistory()
         self._shared_since: dict[tuple[int, int], int] = {}  # visible pair on one box → since ns
+        self._asks: dict[_Ask, Box] = {}
 
     def select(self, box: Box) -> int:
         with self._lock:
@@ -119,12 +133,21 @@ class TrackManager:
         with self._lock:
             self._pending.append((_Op.REMOVE, track_id))
 
-    def step(self, frame: FramePacket, detections: Sequence[Observation] = ()) -> list[TrackSnapshot]:
-        """detections: finished since the last step; each carries the frame it saw."""
+    def requests(self) -> dict[Hashable, Box]:
+        """Boxes of the last stepped frame to embed; answers go to a later step by key."""
+        return dict(self._asks)
+
+    def step(self, frame: FramePacket, detections: Sequence[Observation] = (),
+             embeddings: Mapping[Hashable, np.ndarray | None] | None = None) -> list[TrackSnapshot]:
+        """detections: finished since the last step; each carries the frame it saw.
+        embeddings: answers to earlier requests()."""
+        self._asks = {}
         with self._lock:
             pending, self._pending = self._pending, []
         for op in pending:
             self._apply(op, frame)
+
+        self._receive(embeddings or {})
 
         due = [t for t in self._tracks.values() if t.state in _UPDATED and t.frame_id != frame.frame_id]
         for t in due:
@@ -163,6 +186,17 @@ class TrackManager:
                 t.detected_ns = max(t.detected_ns or det.capture_ns, det.capture_ns)
                 if t.state in _LIFTABLE:
                     t.correction = carry_forward(det.box, seen[track_id], t.kf.box)
+
+    def _receive(self, embeddings):
+        for key, vec in embeddings.items():
+            t = self._tracks.get(key.track_id)
+            if vec is None or t is None or key.init != t.init:
+                continue
+
+            if key.candidate is None:
+                t.reference = vec if t.reference is None else t.reference
+            elif t.state is TrackState.REACQUIRING and t.reference is not None:
+                t.scored.append(replace(key.candidate, score=max(float(vec @ t.reference), 0.0)))
 
     def _apply(self, op, frame):
         kind, track_id, *args = op
@@ -205,6 +239,10 @@ class TrackManager:
         t.prop.init(frame, box)
         t.kf = CvKalman(box, frame.capture_ns, self._cfg)
         t.look = Appearance(frame, box)
+        t.init += 1
+        t.reference = None
+        t.scored = []
+        self._asks[_Ask(t.id, t.init)] = box
         t.seen = box
         t.quality = TrackQuality(OPERATOR_SCORE, None)
         t.observed = box
@@ -270,26 +308,47 @@ class TrackManager:
         if t.state in _VISIBLE:
             t.seen = t.kf.box
 
+        # The request at selection may have been dropped by a busy worker.
+        if t.reference is None and t.state is TrackState.TRACKING and t.recent[-1]:
+            self._asks[_Ask(t.id, t.init)] = t.kf.box
+
     def _reacquire(self, t, frame, obs):
         """Candidates: an appearance search around the prediction and the propagator's box,
-        both scored against the look at selection. A clear winner restarts the propagator and
-        the filter there and is returned as the observation; the ID stays."""
+        sent for embedding every reid_every frames. Their scores arrive steps later; a clear
+        winner restarts the propagator and the filter at its box and is returned as the
+        observation; the ID stays. Without a reference nothing wins."""
         cfg = self._cfg
         reach = cfg.search_reach + cfg.search_growth * (frame.capture_ns - t.state_since) / NS_PER_S
         found = t.look.search(frame, Box(t.kf.box.cx, t.kf.box.cy, t.seen.w, t.seen.h), reach)
-        if obs is not None and (score := t.look.score(frame, obs.box)) is not None:
-            found.append(replace(obs, score=score))
+        if obs is not None:
+            found.append(obs)
 
         # Never another track's object (SPEC).
         held = [o.kf.box for o in self._tracks.values() if o is not t and o.state in _VISIBLE]
         t.candidates = tuple(c for c in found if not any(_center_inside(c.box, b) for b in held))
-        best = _clear_winner(t.candidates, cfg)
+        if t.reference is not None and frame.frame_id % cfg.reid_every == 0:
+            for c in t.candidates:
+                self._asks[_Ask(t.id, t.init, c)] = c.box
+
+        best = self._decide(t, held)
         if best is None:
             return None
 
         t.prop.init(frame, best.box)
         t.kf = CvKalman(best.box, frame.capture_ns, cfg)
         return best
+
+    def _decide(self, t, held):
+        """Scores that arrived, one asked frame at a time; the newest clear winner. A box
+        another track took since it was asked for is out."""
+        by_frame: dict[int, list[Observation]] = {}
+        for c in t.scored:
+            if not any(_center_inside(c.box, b) for b in held):
+                by_frame.setdefault(c.frame_id, []).append(c)
+
+        t.scored = []
+        winners = [w for _, group in sorted(by_frame.items()) if (w := _clear_winner(group, self._cfg)) is not None]
+        return winners[-1] if winners else None
 
     def _dedupe(self, frame):
         """One object, one track: a visible pair on one box for same_object_ns keeps the better one."""
@@ -345,13 +404,13 @@ class TrackManager:
 
 
 def _clear_winner(candidates, cfg) -> Observation | None:
-    """Best candidate if it looks right and leads every other object's candidate by the margin."""
+    """Best candidate if it matches the reference and leads every other object's candidate by the margin."""
     objects = []
     for c in sorted(candidates, key=lambda c: c.score, reverse=True):
         if not any(_same_box(c.box, o.box) for o in objects):
             objects.append(c)
 
-    if not objects or objects[0].score < cfg.good_quality:
+    if not objects or objects[0].score < cfg.reid_min:
         return None
 
     runner_up = objects[1].score if len(objects) > 1 else 0.0

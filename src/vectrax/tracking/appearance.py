@@ -1,4 +1,4 @@
-"""Target appearance: a gray template, NCC scoring and a windowed search."""
+"""Target appearance: a gray template and a windowed NCC search that proposes candidates."""
 
 import cv2
 import numpy as np
@@ -34,16 +34,6 @@ class Appearance:
 
     def __init__(self, frame: FramePacket, box: Box):
         self._template = patch(frame.image, box.to_xywh_px(frame.width, frame.height))
-
-    def score(self, frame: FramePacket, box: Box) -> float | None:
-        if self._template is None:
-            return None
-
-        p = patch(frame.image, box.to_xywh_px(frame.width, frame.height))
-        if p is None:
-            return None
-
-        return _clamp(cv2.matchTemplate(p, self._template, cv2.TM_CCOEFF_NORMED)[0, 0])
 
     def search(self, frame: FramePacket, around: Box, reach: float) -> list[Observation]:
         """Best matches of around's size within `reach` box sizes of it, best first."""

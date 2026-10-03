@@ -7,6 +7,7 @@ import pytest
 
 from vectrax.events import EventBus, EventType
 from vectrax.frames import FramePacket, PixelFormat
+from vectrax.tracking import appearance
 from vectrax.tracking.config import NS_PER_S, TrackingConfig
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.manager import TrackManager
@@ -237,6 +238,61 @@ def _confirm(mgr, seen):
     """Frames 0..READY-1. The detector reports `seen` while the track initializes, then nothing."""
     for i in range(READY):
         mgr.step(_frame(i), [_det(i - 1, box, label) for box, label in seen] if 0 < i < CONFIRM else [])
+
+
+# Re-ID reference (Phase 4 step 3): the worker embeds what the manager asks for, a step or more later.
+
+UNIT = np.full(4, 0.5)
+OTHER = Box(0.3, 0.3, 0.1, 0.1)
+
+
+def test_selection_asks_for_a_reference_embedding():
+    mgr, _, _ = _manager()
+    mgr.select(BOX)
+    mgr.step(_frame(0))
+    asked = mgr.requests()
+    assert list(asked.values()) == [BOX]
+
+    later = []
+    for i in range(1, 10):
+        mgr.step(_frame(i), embeddings={k: UNIT for k in asked} if i == 1 else None)
+        later.append(mgr.requests())
+
+    assert later == [{}] * 9
+
+
+def test_a_lost_reference_request_is_repeated_while_tracking_well():
+    # REALTIME drops a job that arrives while the worker is busy.
+    mgr, _, _ = _manager()
+    tid = mgr.select(BOX)
+    asks = []
+    for i in range(CONFIRM + 2):
+        state = next(s.state for s in mgr.step(_frame(i)) if s.track_id == tid)
+        asks.append((state, list(mgr.requests().values())))
+
+    assert all(boxes == [] for state, boxes in asks[1:] if state is S.INITIALIZING)
+    assert S.TRACKING in {state for state, _ in asks}
+    assert all(boxes == [BOX] for state, boxes in asks if state is S.TRACKING)
+
+    mgr.step(_frame(CONFIRM + 2), embeddings={k: UNIT for k in mgr.requests()})
+
+    assert mgr.requests() == {}
+
+
+def test_a_reference_from_before_a_reselect_is_discarded():
+    mgr, _, _ = _manager()
+    tid = mgr.select(BOX)
+    mgr.step(_frame(0))
+    stale = {k: UNIT for k in mgr.requests()}
+    mgr.command(tid, Command.RESELECT, OTHER)
+    mgr.step(_frame(1))
+    assert list(mgr.requests().values()) == [OTHER]
+
+    mgr.step(_frame(2), embeddings=stale)
+    snaps = _run(mgr, 3, CONFIRM)
+
+    assert snaps[tid].state is S.TRACKING
+    assert list(mgr.requests().values()) == [OTHER]
 
 
 @pytest.mark.parametrize("score, weak", [(0.1, S.OCCLUDED), (0.45, S.DEGRADED)])
@@ -480,8 +536,26 @@ def _scene_manager(tracks):
     return mgr, [mgr.select(path(0)) for _, path, *_ in tracks]
 
 
-def _play(mgr, scene, start, stop, track_id):
-    return [next(s for s in mgr.step(scene.frame(i)) if s.track_id == track_id) for i in range(start, stop)]
+def _embed(frame, box):
+    """Stand-in for DINOv2-S: the blurred gray patch, so cosine is its NCC."""
+    p = appearance.patch(frame.image, box.to_xywh_px(frame.width, frame.height))
+    if p is None:
+        return None
+
+    v = (p - p.mean()).ravel()
+    n = np.linalg.norm(v)
+    return v / n if n else None
+
+
+def _play(mgr, scene, start, stop, track_id, embeds=True):
+    """Like the DETERMINISTIC worker: boxes asked for on frame i are embedded there and arrive at step i + 1."""
+    snaps, done = [], {}
+    for i in range(start, stop):
+        frame = scene.frame(i)
+        snaps.append(next(s for s in mgr.step(frame, embeddings=done) if s.track_id == track_id))
+        done = {k: _embed(frame, b) for k, b in mgr.requests().items()} if embeds else {}
+
+    return snaps
 
 
 def _at(box, x, y, px=4):
@@ -511,6 +585,34 @@ def test_reacquiring_finds_the_target_where_it_came_back():
     assert S.REACQUIRING in {s.state for s in snaps}
     assert snaps[-1].state is S.TRACKING
     assert _at(snaps[-1].box, *AWAY_PX)
+
+
+def test_without_embeddings_reacquiring_only_waits():
+    background, (target,) = _textures(1)
+    scene = _Scene(background, _hidden_then(target, AWAY_PX))
+    mgr, (tid,) = _scene_manager([_lost_propagator()])
+
+    snaps = _play(mgr, scene, 0, BACK + REACQUIRING_BY, tid, embeds=False)
+
+    assert snaps[-1].state is S.REACQUIRING
+    assert mgr.requests() == {}
+
+
+def test_reacquiring_asks_for_its_candidates_every_reid_every_frames():
+    background, (target,) = _textures(1)
+    scene = _Scene(background, lambda i: [(target, HOME_PX)] if i < HIDE else [])
+    mgr, (tid,) = _scene_manager([_lost_propagator()])
+    asked, done = {}, {}
+
+    for i in range(BACK + REACQUIRING_BY):
+        frame = scene.frame(i)
+        state = next(s.state for s in mgr.step(frame, embeddings=done) if s.track_id == tid)
+        done = {k: _embed(frame, b) for k, b in mgr.requests().items()}
+        if state is S.REACQUIRING:
+            asked[i] = len(done)
+
+    assert asked
+    assert all((n > 0) == (i % REACQ_CFG.reid_every == 0) for i, n in asked.items())
 
 
 def test_two_look_alikes_keep_the_track_reacquiring():

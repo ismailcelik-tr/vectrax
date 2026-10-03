@@ -47,11 +47,14 @@ class TrackingConfig:
     # past IoU 0.17 while both visible; merged pupils held 0.5-0.89 for seconds.
     same_object_ns: int = NS_PER_S // 2
     # REACQUIRING searches a window this many box sizes around the prediction,
-    # growing per second searched. A candidate needs good_quality appearance and
+    # growing per second searched, and has the candidates embedded every
+    # reid_every frames. A candidate needs reid_min cosine to the reference and
     # this lead over any other object's candidate.
     search_reach: float = 1.0
     search_growth: float = 2.0
     reacquire_margin: float = 0.1
+    reid_min: float = 0.6
+    reid_every: int = 3
 
     def __post_init__(self):
         if not 0 <= self.min_quality < self.good_quality <= 1:
@@ -83,3 +86,9 @@ class TrackingConfig:
 
         if min(self.search_reach, self.search_growth, self.reacquire_margin) < 0:
             raise ValueError("search_reach, search_growth and reacquire_margin must be >= 0")
+
+        if not 0 <= self.reid_min <= 1:
+            raise ValueError("need 0 <= reid_min <= 1")
+
+        if self.reid_every < 1:
+            raise ValueError("reid_every must be >= 1")

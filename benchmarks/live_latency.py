@@ -5,6 +5,7 @@ Keep the window untouched while it runs (resizing stalls OpenCV).
 
   uv run benchmarks/live_latency.py --targets 1,3
   uv run benchmarks/live_latency.py --targets 1,3 --detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage
+      [--reid models/reid/exported/dinov2s_fp16.mlpackage]
 """
 
 import argparse
@@ -21,6 +22,7 @@ from vectrax.detection.coreml import CoreMlDetector
 from vectrax.detection.worker import STRIDE, InferenceWorker
 from vectrax.metrics import LatencyStats, Metrics, RunMode
 from vectrax.pipeline import build_camera_pipeline
+from vectrax.reid.coreml import CoreMlEmbedder
 from vectrax.tracking.config import TrackingConfig
 from vectrax.ui.opencv_view import run_ui
 
@@ -42,7 +44,7 @@ def _boxes(n):
 class _WorkerProbe:
     """Wraps InferenceWorker for Pipeline. Measures what detection costs the
     tick thread (`submit`) and how old a result is when the tick fuses it.
-    Pipeline.process calls `results()` then `submit(frame)` with the frame it
+    Pipeline.process calls `results()` then `submit(frame, ...)` with the frame it
     fused them on, so ages are taken in `submit`."""
 
     def __init__(self, worker: InferenceWorker, warmup_frames: int):
@@ -65,9 +67,9 @@ class _WorkerProbe:
         self._fused = self._worker.results()
         return self._fused
 
-    def submit(self, frame):
+    def submit(self, frame, requests=(), labels=frozenset()):
         started = self._clock.now_ns()
-        self._worker.submit(frame)
+        self._worker.submit(frame, requests, labels)
         elapsed = self._clock.now_ns() - started
         if self._warmup > 0:
             self._warmup -= 1
@@ -112,7 +114,10 @@ def main():
     p.add_argument("--frames", type=int, default=FRAMES)
     p.add_argument("--detect", help="Core ML detector package; detection runs alongside tracking")
     p.add_argument("--detect-stride", type=int, default=STRIDE)
+    p.add_argument("--reid", help="Core ML Re-ID package (needs --detect); appearance decides reacquisition")
     args = p.parse_args()
+    if args.reid and not args.detect:
+        p.error("--reid needs --detect")
 
     env = _env()
     if "AC Power" not in env["power"]:
@@ -120,13 +125,15 @@ def main():
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    suffix = "_detect" if args.detect else ""
+    suffix = ("_detect" if args.detect else "") + ("_reid" if args.reid else "")
     rows = []
     counts = [int(v) for v in args.targets.split(",")]
     for i, n in enumerate(counts):
         probe = None
         if args.detect:
-            worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.REALTIME, stride=args.detect_stride)
+            embedder = CoreMlEmbedder(Path(args.reid)) if args.reid else None
+            worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.REALTIME, stride=args.detect_stride,
+                                     embedder=embedder)
             probe = _WorkerProbe(worker, WARMUP_FRAMES)
 
         # Loads and warms the detector before the first frame is timed.
@@ -136,7 +143,8 @@ def main():
         report = {"targets": n, "box_px": BOX_PX, "frames": args.frames, "warmup": WARMUP_FRAMES,
                   "dropped": pipe.dropped, "env": env, **summary}
         if probe is not None:
-            report["detection"] = {"detector": args.detect, "stride": args.detect_stride, **probe.summary()}
+            report["detection"] = {"detector": args.detect, "stride": args.detect_stride, "reid": args.reid,
+                                   **probe.summary()}
 
         # Repeated counts (--targets 1,1) would overwrite each other.
         run = f"_run{i + 1}" if counts.count(n) > 1 else ""

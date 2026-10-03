@@ -81,3 +81,48 @@ def test_pipeline_without_a_worker_reports_no_detections(tmp_path):
     tick = pipe.tick()
 
     assert tick.detections == []
+
+
+class StubEmbedder:
+    def __init__(self):
+        self.calls = []
+
+    def load(self):
+        pass
+
+    def embed(self, frame, boxes):
+        self.calls.append((frame.frame_id, list(boxes)))
+        return [np.full(4, 0.5) for _ in boxes]
+
+
+class TargetDetector(StubDetector):
+    """Reports the moving patch."""
+
+    def detect(self, frame):
+        box = Box.from_xywh_px(START_X + STEP_PX * frame.frame_id, Y, SIDE, SIDE, W, H)
+        return [Observation(frame.frame_id, frame.capture_ns, box, 0.8, Origin.DETECTOR, "cup")]
+
+
+def _run_reid(tmp_path, detector):
+    embedder = StubEmbedder()
+    worker = InferenceWorker(detector, RunMode.DETERMINISTIC, clock=VirtualClock(), embedder=embedder)
+    pipe = build_file_pipeline(_clip(tmp_path), TrackingConfig(), clock=VirtualClock(), worker=worker)
+    selected = Box.from_xywh_px(START_X, Y, SIDE, SIDE, W, H)
+    pipe.select(selected)
+    while pipe.tick() is not None:
+        pass
+
+    return embedder.calls, selected
+
+
+def test_the_selection_is_embedded_once_and_the_answer_reaches_the_tracks(tmp_path):
+    # StubDetector's box never overlaps the target: no class to watch.
+    calls, selected = _run_reid(tmp_path, StubDetector())
+
+    assert calls == [(0, [selected])]
+
+
+def test_detections_of_the_class_a_track_watches_are_embedded(tmp_path):
+    calls, _ = _run_reid(tmp_path, TargetDetector())
+
+    assert any(len(boxes) == 1 and frame_id > 0 for frame_id, boxes in calls)

@@ -5,6 +5,7 @@
   uv run vectrax --source file:clip.mp4 --headless --init-boxes 320,180,120,90 --out run.jsonl
   uv run vectrax --source file:data/sessions/NAME/video.mp4 --headless --render-out review.mp4
   uv run vectrax --source camera:MacBook --detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage
+      [--reid models/reid/exported/dinov2s_fp16.mlpackage]
 
 Headless operator input, first match wins: --init-boxes, the session's
 operator.jsonl, the clip's <clip>.init.json.
@@ -25,6 +26,7 @@ from vectrax.detection.worker import STRIDE, InferenceWorker
 from vectrax.metrics import RunMode
 from vectrax.pipeline import Pipeline, build_camera_pipeline, build_file_pipeline
 from vectrax.recording import OPERATOR_LOG, SessionRecorder
+from vectrax.reid.coreml import CoreMlEmbedder
 from vectrax.tracking.config import TrackingConfig
 from vectrax.tracking.geometry import Box
 from vectrax.tracking.state import Command
@@ -49,7 +51,8 @@ def _worker(args, mode) -> InferenceWorker | None:
     if not args.detect:
         return None
 
-    return InferenceWorker(CoreMlDetector(Path(args.detect)), mode, stride=args.detect_stride)
+    embedder = CoreMlEmbedder(Path(args.reid)) if args.reid else None
+    return InferenceWorker(CoreMlDetector(Path(args.detect)), mode, stride=args.detect_stride, embedder=embedder)
 
 
 def _build(args) -> Pipeline:
@@ -185,7 +188,10 @@ def main(argv=None):
     p.add_argument("--scale", type=float, default=1.0, help="propagator downscale (0,1]")
     p.add_argument("--detect", help="Core ML detector package; detections lift track state")
     p.add_argument("--detect-stride", type=int, default=STRIDE, help="detect every Nth frame")
+    p.add_argument("--reid", help="Core ML Re-ID package (needs --detect); appearance decides reacquisition")
     args = p.parse_args(argv)
+    if args.reid and not args.detect:
+        p.error("--reid needs --detect")
 
     summary = _headless(args) if args.headless else _interactive(args)
     if args.metrics_out:

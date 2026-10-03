@@ -2,6 +2,7 @@
 
   uv run benchmarks/tracking_eval.py --propagator csrt
   uv run benchmarks/tracking_eval.py --propagator nano_ncc --detect models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage
+      [--reid models/reid/exported/dinov2s_fp16.mlpackage]
 
 --one-at-a-time runs multi-target fixtures once per target with only that one selected, as an
 operator tracking one of two look-alikes would; rows read <fixture>#<target>.
@@ -20,6 +21,7 @@ from vectrax.evaluation.gt import load_mot
 from vectrax.evaluation.metrics import Relock
 from vectrax.evaluation.runner import run_fixture
 from vectrax.metrics import RunMode
+from vectrax.reid.coreml import CoreMlEmbedder
 from vectrax.tracking.propagators import (
     CsrtPropagator,
     KcfPropagator,
@@ -82,15 +84,22 @@ def main():
     p.add_argument("--propagator", choices=sorted(PROPAGATORS), default="csrt")
     p.add_argument("--fixtures", default=",".join(NAMES))
     p.add_argument("--detect", help="Core ML detector package; fused into track state")
+    p.add_argument("--reid", help="Core ML Re-ID package (needs --detect); appearance decides reacquisition")
     p.add_argument("--one-at-a-time", action="store_true", help="select one target per run")
     args = p.parse_args()
+    if args.reid and not args.detect:
+        p.error("--reid needs --detect")
 
     rows = []
     for name in args.fixtures.split(","):
         video = FIXTURES / f"{name}.mp4"
         targets = sorted(load_mot(video.with_suffix("").with_suffix(".gt.zip"), 0).tracks)
         for only in targets if args.one_at_a_time and len(targets) > 1 else [None]:
-            worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.DETERMINISTIC) if args.detect else None
+            worker = None
+            if args.detect:
+                embedder = CoreMlEmbedder(Path(args.reid)) if args.reid else None
+                worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.DETERMINISTIC, embedder=embedder)
+
             result = run_fixture(video, PROPAGATORS[args.propagator], worker=worker, only=only)
             rows.append(_summary(name if only is None else f"{name}#{only}", result))
 
@@ -103,10 +112,11 @@ def main():
               f"{r['recoveries']}")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    report = {"propagator": args.propagator, "detector": args.detect, "one_at_a_time": args.one_at_a_time,
+    report = {"propagator": args.propagator, "detector": args.detect, "reid": args.reid,
+              "one_at_a_time": args.one_at_a_time,
               "git_sha": _git("rev-parse", "--short", "HEAD"),
               "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")), "macos": platform.mac_ver()[0], "fixtures": rows}
-    suffix = ("_detect" if args.detect else "") + ("_one" if args.one_at_a_time else "")
+    suffix = ("_detect" if args.detect else "") + ("_reid" if args.reid else "") + ("_one" if args.one_at_a_time else "")
     out = OUT_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{args.propagator}{suffix}.json"
     out.write_text(json.dumps(report, indent=2))
     print(f"\nSaved {out}")

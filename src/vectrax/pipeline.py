@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from vectrax.clock import Clock, MonotonicClock
+from vectrax.detection.worker import EmbedRequest
 from vectrax.events import EventBus
 from vectrax.frames import FramePacket
 from vectrax.metrics import FrameTiming, Metrics, RunMode
@@ -92,22 +93,24 @@ class Pipeline:
                 self._recorder.log({"frame": self._recorder.next_index if index is None else index, **op})
 
         tick_ns = self._clock.now_ns()
-        detections = self._finished()
-        tracks = self._manager.step(frame, detections)
+        detections, embeddings = self._finished()
+        tracks = self._manager.step(frame, detections, embeddings)
         timing = FrameTiming(frame.capture_ns, frame.arrival_ns, tick_ns, self._clock.now_ns())
         self.metrics.observe(timing)
         # After the step: DETERMINISTIC detects inline, and its result is fused
         # on the next tick, one frame late, like the live path.
         if self._worker is not None:
-            self._worker.submit(frame)
+            requests = [EmbedRequest(key, box) for key, box in self._manager.requests().items()]
+            self._worker.submit(frame, requests, self._manager.labels())
 
         return Tick(frame, tracks, timing, detections)
 
-    def _finished(self) -> list[Observation]:
+    def _finished(self) -> tuple[list[Observation], dict]:
         if self._worker is None:
-            return []
+            return [], {}
 
-        return [o for result in self._worker.results() for o in result.observations]
+        results = self._worker.results()
+        return [o for r in results for o in r.observations], {k: v for r in results for k, v in r.embeddings.items()}
 
     def rendered(self, tick: Tick) -> None:
         self.metrics.observe_render(tick.timing, self._clock.now_ns())

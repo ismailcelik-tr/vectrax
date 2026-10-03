@@ -393,6 +393,23 @@ def test_an_embedded_detection_lifts_only_if_it_looks_like_the_reference(look, s
     assert _state(mgr, READY + 1, tid, [replace(_det(READY, BOX), embedding=look)]) is state
 
 
+@pytest.mark.parametrize("rival_look, rival_label, state", [
+    (UNIT, LABEL, S.OCCLUDED),
+    (ORTHO, LABEL, S.TRACKING),
+    (UNIT, "bowl", S.TRACKING),
+])
+def test_an_embedded_detection_lifts_only_if_it_beats_its_look_alikes(rival_look, rival_label, state):
+    # crossing_targets: the other cup scored up to 0.81 against the reference; own cup 0.81 at p50.
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else 0.1)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)], look=UNIT)
+    assert _state(mgr, READY, tid) is S.OCCLUDED
+
+    seen = [replace(_det(READY, BOX), embedding=UNIT), replace(_det(READY, OTHER, rival_label), embedding=rival_look)]
+
+    assert _state(mgr, READY + 1, tid, seen) is state
+
+
 @pytest.mark.parametrize("look, pulled", [(UNIT, True), (ORTHO, False)])
 def test_an_embedded_detection_corrects_the_box_only_if_it_looks_like_the_reference(look, pulled):
     speed, frames = 0.01, 30

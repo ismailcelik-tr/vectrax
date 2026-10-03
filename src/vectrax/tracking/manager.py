@@ -186,23 +186,28 @@ class TrackManager:
                 if t.state is TrackState.INITIALIZING:
                     t.label = t.label or det.label
 
-                if det.label is None or det.label != t.label or not self._looks_right(t, det):
+                if det.label is None or det.label != t.label or not self._looks_right(t, det, group):
                     continue
 
                 t.detected_ns = max(t.detected_ns or det.capture_ns, det.capture_ns)
                 if t.state in _LIFTABLE:
                     t.correction = carry_forward(det.box, seen[track_id], t.kf.box)
 
-    def _looks_right(self, t, det):
-        """Without an embedding on both sides, Phase 3: the class alone. REACQUIRING leaves
-        only through _reacquire, which weighs look-alikes and restarts the propagator."""
+    def _looks_right(self, t, det, group):
+        """Without an embedding on both sides, Phase 3: the class alone. Otherwise the clear
+        winner among the frame's detections of its class: no fixed threshold separates two
+        cups (crossing_targets). REACQUIRING leaves only through _reacquire, which also
+        restarts the propagator."""
         if det.embedding is None or t.reference is None:
             return True
 
         if t.state is TrackState.REACQUIRING:
             return False
 
-        return _cosine(det.embedding, t.reference) >= self._cfg.reid_min
+        rivals = [replace(d, score=_cosine(d.embedding, t.reference)) for d in group
+                  if d.label == t.label and d.embedding is not None]
+        best = _clear_winner(rivals, self._cfg)
+        return best is not None and _same_box(best.box, det.box)
 
     def _propose(self, group, matched):
         """Embedded detections of a REACQUIRING track's class are its candidates, unless another track matched them."""

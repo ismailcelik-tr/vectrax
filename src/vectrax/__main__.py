@@ -48,11 +48,12 @@ def _parse_boxes(text):
 
 
 def _worker(args, mode) -> InferenceWorker | None:
-    if not args.detect:
+    if not args.detect and not args.reid:
         return None
 
+    detector = CoreMlDetector(Path(args.detect)) if args.detect else None
     embedder = CoreMlEmbedder(Path(args.reid)) if args.reid else None
-    return InferenceWorker(CoreMlDetector(Path(args.detect)), mode, stride=args.detect_stride, embedder=embedder)
+    return InferenceWorker(detector, mode, stride=args.detect_stride, embedder=embedder)
 
 
 def _build(args) -> Pipeline:
@@ -188,10 +189,8 @@ def main(argv=None):
     p.add_argument("--scale", type=float, default=1.0, help="propagator downscale (0,1]")
     p.add_argument("--detect", help="Core ML detector package; detections lift track state")
     p.add_argument("--detect-stride", type=int, default=STRIDE, help="detect every Nth frame")
-    p.add_argument("--reid", help="Core ML Re-ID package (needs --detect); appearance decides reacquisition")
+    p.add_argument("--reid", help="Core ML Re-ID package; appearance decides reacquisition")
     args = p.parse_args(argv)
-    if args.reid and not args.detect:
-        p.error("--reid needs --detect")
 
     summary = _headless(args) if args.headless else _interactive(args)
     if args.metrics_out:

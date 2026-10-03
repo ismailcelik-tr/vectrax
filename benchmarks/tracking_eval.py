@@ -84,11 +84,9 @@ def main():
     p.add_argument("--propagator", choices=sorted(PROPAGATORS), default="csrt")
     p.add_argument("--fixtures", default=",".join(NAMES))
     p.add_argument("--detect", help="Core ML detector package; fused into track state")
-    p.add_argument("--reid", help="Core ML Re-ID package (needs --detect); appearance decides reacquisition")
+    p.add_argument("--reid", help="Core ML Re-ID package; appearance decides reacquisition")
     p.add_argument("--one-at-a-time", action="store_true", help="select one target per run")
     args = p.parse_args()
-    if args.reid and not args.detect:
-        p.error("--reid needs --detect")
 
     rows = []
     for name in args.fixtures.split(","):
@@ -96,9 +94,10 @@ def main():
         targets = sorted(load_mot(video.with_suffix("").with_suffix(".gt.zip"), 0).tracks)
         for only in targets if args.one_at_a_time and len(targets) > 1 else [None]:
             worker = None
-            if args.detect:
+            if args.detect or args.reid:
+                detector = CoreMlDetector(Path(args.detect)) if args.detect else None
                 embedder = CoreMlEmbedder(Path(args.reid)) if args.reid else None
-                worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.DETERMINISTIC, embedder=embedder)
+                worker = InferenceWorker(detector, RunMode.DETERMINISTIC, embedder=embedder)
 
             result = run_fixture(video, PROPAGATORS[args.propagator], worker=worker, only=only)
             rows.append(_summary(name if only is None else f"{name}#{only}", result))

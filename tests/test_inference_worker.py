@@ -222,3 +222,18 @@ def test_realtime_returns_embeddings_too():
         worker.stop()
 
     assert set(results[0].embeddings) == {"a"}
+
+
+def test_without_a_detector_only_requests_are_embedded():
+    # Re-ID without detection: non-COCO targets get no help from the detector anyway.
+    embedder = FakeEmbedder()
+    worker = InferenceWorker(None, RunMode.DETERMINISTIC, clock=VirtualClock(), stride=1, embedder=embedder)
+    worker.start()
+
+    worker.submit(_frame(0))
+    worker.submit(_frame(1), [EmbedRequest("a", Box(0.5, 0.5, 0.1, 0.1))])
+    (result,) = worker.results()
+
+    assert result.frame_id == 1
+    assert result.observations == []
+    assert set(result.embeddings) == {"a"}

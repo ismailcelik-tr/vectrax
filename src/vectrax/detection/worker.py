@@ -47,8 +47,8 @@ class InferenceWorker:
     a slow model drops frames, it never queues them or delays the tick.
     DETERMINISTIC runs it inline on `submit`, so a replay reproduces exactly.
 
-    The detector must provide `load()` and `detect(frame)`; the optional
-    embedder `load()` and `embed(frame, boxes)`. `start()` loads them eagerly
+    The detector, if any, must provide `load()` and `detect(frame)`; the
+    embedder, if any, `load()` and `embed(frame, boxes)`. `start()` loads them eagerly
     and lets a bad model fail there, where the caller sees it: per-frame
     failures are counted and skipped in REALTIME, so a model that never works
     would otherwise stay silent. DETERMINISTIC lets a failure raise, because a
@@ -90,7 +90,9 @@ class InferenceWorker:
         if self._thread is not None:
             return
 
-        self._detector.load()
+        if self._detector is not None:
+            self._detector.load()
+
         if self._embedder is not None:
             self._embedder.load()
 
@@ -112,7 +114,7 @@ class InferenceWorker:
         """Never blocks. Detects on the stride; embeds `requests` and detections
         of `labels` when there is an embedder. A frame with nothing to do, and a
         job arriving while the worker is busy, is dropped."""
-        detect = frame.frame_id % self._stride == 0
+        detect = self._detector is not None and frame.frame_id % self._stride == 0
         requests = requests if self._embedder is not None else ()
         if not detect and not requests:
             return

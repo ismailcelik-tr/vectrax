@@ -114,10 +114,8 @@ def main():
     p.add_argument("--frames", type=int, default=FRAMES)
     p.add_argument("--detect", help="Core ML detector package; detection runs alongside tracking")
     p.add_argument("--detect-stride", type=int, default=STRIDE)
-    p.add_argument("--reid", help="Core ML Re-ID package (needs --detect); appearance decides reacquisition")
+    p.add_argument("--reid", help="Core ML Re-ID package; appearance decides reacquisition")
     args = p.parse_args()
-    if args.reid and not args.detect:
-        p.error("--reid needs --detect")
 
     env = _env()
     if "AC Power" not in env["power"]:
@@ -130,10 +128,10 @@ def main():
     counts = [int(v) for v in args.targets.split(",")]
     for i, n in enumerate(counts):
         probe = None
-        if args.detect:
+        if args.detect or args.reid:
+            detector = CoreMlDetector(Path(args.detect)) if args.detect else None
             embedder = CoreMlEmbedder(Path(args.reid)) if args.reid else None
-            worker = InferenceWorker(CoreMlDetector(Path(args.detect)), RunMode.REALTIME, stride=args.detect_stride,
-                                     embedder=embedder)
+            worker = InferenceWorker(detector, RunMode.REALTIME, stride=args.detect_stride, embedder=embedder)
             probe = _WorkerProbe(worker, WARMUP_FRAMES)
 
         # Loads and warms the detector before the first frame is timed.

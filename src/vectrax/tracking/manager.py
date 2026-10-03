@@ -175,7 +175,9 @@ class TrackManager:
         for frame_id, group in by_frame.items():
             seen = {i: box for i, box in self._history.at(frame_id).items() if i in self._tracks}
             labels = {i: self._tracks[i].label for i in seen if self._tracks[i].label is not None}
-            for track_id, det in associate(seen, group, self._cfg, labels).items():
+            matched = associate(seen, group, self._cfg, labels)
+            self._propose(group, matched)
+            for track_id, det in matched.items():
                 t = self._tracks[track_id]
                 if t.state is TrackState.INITIALIZING:
                     t.label = t.label or det.label
@@ -187,6 +189,19 @@ class TrackManager:
                 if t.state in _LIFTABLE:
                     t.correction = carry_forward(det.box, seen[track_id], t.kf.box)
 
+    def _propose(self, group, matched):
+        """Embedded detections of a REACQUIRING track's class are its candidates, unless another track matched them."""
+        owner = {id(d): i for i, d in matched.items()}
+        for t in self._tracks.values():
+            if t.state is not TrackState.REACQUIRING or t.reference is None or t.label is None:
+                continue
+
+            for d in group:
+                if d.embedding is None or d.label != t.label or owner.get(id(d), t.id) != t.id:
+                    continue
+
+                t.scored.append(replace(d, score=_cosine(d.embedding, t.reference)))
+
     def _receive(self, embeddings):
         for key, vec in embeddings.items():
             t = self._tracks.get(key.track_id)
@@ -196,7 +211,7 @@ class TrackManager:
             if key.candidate is None:
                 t.reference = vec if t.reference is None else t.reference
             elif t.state is TrackState.REACQUIRING and t.reference is not None:
-                t.scored.append(replace(key.candidate, score=max(float(vec @ t.reference), 0.0)))
+                t.scored.append(replace(key.candidate, score=_cosine(vec, t.reference)))
 
     def _apply(self, op, frame):
         kind, track_id, *args = op
@@ -418,6 +433,11 @@ def _clear_winner(candidates, cfg) -> Observation | None:
         return None
 
     return objects[0]
+
+
+def _cosine(a: np.ndarray, b: np.ndarray) -> float:
+    """Both L2-normalized; clamped to a 0..1 score."""
+    return max(float(a @ b), 0.0)
 
 
 def _same_box(a: Box, b: Box) -> bool:

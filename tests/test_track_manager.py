@@ -547,13 +547,15 @@ def _embed(frame, box):
     return v / n if n else None
 
 
-def _play(mgr, scene, start, stop, track_id, embeds=True):
-    """Like the DETERMINISTIC worker: boxes asked for on frame i are embedded there and arrive at step i + 1."""
-    snaps, done = [], {}
+def _play(mgr, scene, start, stop, track_id, embeds=True, seen=lambda i: ()):
+    """Like the DETERMINISTIC worker: boxes asked for on frame i and detections `seen(i)` = [(box, label)]
+    are embedded there and arrive at step i + 1."""
+    snaps, done, found = [], {}, []
     for i in range(start, stop):
         frame = scene.frame(i)
-        snaps.append(next(s for s in mgr.step(frame, embeddings=done) if s.track_id == track_id))
+        snaps.append(next(s for s in mgr.step(frame, found, done) if s.track_id == track_id))
         done = {k: _embed(frame, b) for k, b in mgr.requests().items()} if embeds else {}
+        found = [replace(_det(i, b, label), embedding=_embed(frame, b) if embeds else None) for b, label in seen(i)]
 
     return snaps
 
@@ -714,6 +716,46 @@ def test_a_yielded_track_reacquires_its_own_object():
     assert S.OCCLUDED in {s.state for s in snaps}
     assert snaps[-1].state is S.TRACKING
     assert _at(snaps[-1].box, *right_px)
+
+
+FAR_PX = (270, 190)  # outside the search window in REACQUIRING's first frames
+REACQUIRING_AT = HIDE + REACQ_CFG.occlusion_timeout_ns // FRAME_NS + 1
+
+
+@pytest.mark.parametrize("label, taken", [(LABEL, True), ("bowl", False)])
+def test_a_detection_of_the_tracks_class_is_a_candidate(label, taken):
+    background, (target,) = _textures(1)
+    scene = _Scene(background, _hidden_then(target, FAR_PX))
+    mgr, (tid,) = _scene_manager([_lost_propagator()])
+
+    def seen(i):
+        if i < CONFIRM:
+            return [(_px(*HOME_PX), LABEL)]
+
+        return [(_px(*FAR_PX), label)] if i >= BACK else []
+
+    snaps = _play(mgr, scene, 0, REACQUIRING_AT + 6, tid, seen=seen)
+
+    assert (snaps[-1].state is S.TRACKING) is taken
+    assert _at(snaps[-1].box, *FAR_PX) is taken
+
+
+def test_a_detection_on_another_track_is_not_a_candidate():
+    background, (target,) = _textures(1)
+
+    def placed(i):
+        own = [(target, HOME_PX)] if i < HIDE else []
+        return [(target, FAR_PX), *own]
+
+    holder = (lambda i: 0.9, lambda i: _px(*FAR_PX))
+    mgr, (_, tid) = _scene_manager([holder, _lost_propagator()])
+
+    def seen(i):
+        return [(_px(*FAR_PX), LABEL)] + ([(_px(*HOME_PX), LABEL)] if i < CONFIRM else [])
+
+    snaps = _play(mgr, _Scene(background, placed), 0, REACQUIRING_AT + 6, tid, seen=seen)
+
+    assert snaps[-1].state is S.REACQUIRING
 
 
 def test_a_reacquiring_snapshot_carries_its_candidates():

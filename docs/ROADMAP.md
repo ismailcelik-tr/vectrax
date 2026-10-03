@@ -251,8 +251,15 @@ Steps, one commit each, test first:
       look-alikes, Re-ID with or without a detector, --reid. EVALUATION.md
       "Re-ID in the loop": recoveries 0/6 → 6/6, crossing_targets#2 hijack
       471 → 132; near_targets#2 100 → 60 %, non_coco 47 → 36 %. Open:
-      remaining crossing hijack, those two regressions, phase3_verify2
-      f372 replay, R3a/R3b with Re-ID, ADR-011, UI candidate.
+      remaining crossing hijack, those two regressions, R3a/R3b with
+      Re-ID, ADR-011, UI candidate.
+      phase3_verify2 replay (`uv run vectrax --source
+      file:data/sessions/phase3_verify2/video.mp4 --headless --detect
+      models/detectors/exported/rfdetr_n/rfdetr-nano_fp16.mlpackage [--reid
+      models/reid/exported/dinov2s_fp16.mlpackage]`, git 8b36857): no jump
+      while OCCLUDED. With Re-ID the phone track goes REACQUIRING f325 and
+      comes back f377 onto the phone (checked by eye, no GT); without, it
+      stays REACQUIRING from f317.
 - [ ] 4. Appearance gallery: samples only from TRACKING at good quality.
 - [ ] 5. Re-ID ladder: NCC → color histogram → DINOv2-S (licence, on the
       worker) → EVALUATION.md, PERFORMANCE.md, ADR-011.

@@ -133,6 +133,10 @@ class TrackManager:
         with self._lock:
             self._pending.append((_Op.REMOVE, track_id))
 
+    def labels(self) -> frozenset[str]:
+        """Classes whose detections to embed, to check them against the tracks."""
+        return frozenset(t.label for t in self._tracks.values() if t.state in _UPDATED and t.label is not None)
+
     def requests(self) -> dict[Hashable, Box]:
         """Boxes of the last stepped frame to embed; answers go to a later step by key."""
         return dict(self._asks)
@@ -182,12 +186,23 @@ class TrackManager:
                 if t.state is TrackState.INITIALIZING:
                     t.label = t.label or det.label
 
-                if det.label is None or det.label != t.label:
+                if det.label is None or det.label != t.label or not self._looks_right(t, det):
                     continue
 
                 t.detected_ns = max(t.detected_ns or det.capture_ns, det.capture_ns)
                 if t.state in _LIFTABLE:
                     t.correction = carry_forward(det.box, seen[track_id], t.kf.box)
+
+    def _looks_right(self, t, det):
+        """Without an embedding on both sides, Phase 3: the class alone. REACQUIRING leaves
+        only through _reacquire, which weighs look-alikes and restarts the propagator."""
+        if det.embedding is None or t.reference is None:
+            return True
+
+        if t.state is TrackState.REACQUIRING:
+            return False
+
+        return _cosine(det.embedding, t.reference) >= self._cfg.reid_min
 
     def _propose(self, group, matched):
         """Embedded detections of a REACQUIRING track's class are its candidates, unless another track matched them."""

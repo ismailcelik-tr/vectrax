@@ -219,6 +219,9 @@ def test_jittering_score_still_confirms_within_the_window():
 
 
 LABEL = "cup"
+UNIT = np.full(4, 0.5)
+ORTHO = np.array([0.5, 0.5, -0.5, -0.5])
+OTHER = Box(0.3, 0.3, 0.1, 0.1)
 
 
 def _det(frame_id, box, label=LABEL):
@@ -234,17 +237,15 @@ CONFIRM = CFG.confirm_frames
 READY = CONFIRM + HOLD_FRAMES  # confirmed, and the evidence from selection has lapsed
 
 
-def _confirm(mgr, seen):
-    """Frames 0..READY-1. The detector reports `seen` while the track initializes, then nothing."""
+def _confirm(mgr, seen, look=None):
+    """Frames 0..READY-1. The detector reports `seen` while the track initializes, then nothing.
+    `look` answers the reference requests of frame 0."""
     for i in range(READY):
-        mgr.step(_frame(i), [_det(i - 1, box, label) for box, label in seen] if 0 < i < CONFIRM else [])
+        answers = {k: look for k in mgr.requests()} if i == 1 and look is not None else None
+        mgr.step(_frame(i), [_det(i - 1, box, label) for box, label in seen] if 0 < i < CONFIRM else [], answers)
 
 
 # Re-ID reference (Phase 4 step 3): the worker embeds what the manager asks for, a step or more later.
-
-UNIT = np.full(4, 0.5)
-OTHER = Box(0.3, 0.3, 0.1, 0.1)
-
 
 def test_selection_asks_for_a_reference_embedding():
     mgr, _, _ = _manager()
@@ -379,6 +380,58 @@ def test_a_matched_detection_pulls_the_box_onto_the_target():
 
     assert snap.state is S.TRACKING
     assert abs(snap.box.cx - target(READY + frames - 1).cx) < target(0).w / 2
+
+
+@pytest.mark.parametrize("look, state", [(UNIT, S.TRACKING), (ORTHO, S.OCCLUDED)])
+def test_an_embedded_detection_lifts_only_if_it_looks_like_the_reference(look, state):
+    # crossing_targets#2: a lone track's detection lift carried it onto the other cup.
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else 0.1)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)], look=UNIT)
+    assert _state(mgr, READY, tid) is S.OCCLUDED
+
+    assert _state(mgr, READY + 1, tid, [replace(_det(READY, BOX), embedding=look)]) is state
+
+
+@pytest.mark.parametrize("look, pulled", [(UNIT, True), (ORTHO, False)])
+def test_an_embedded_detection_corrects_the_box_only_if_it_looks_like_the_reference(look, pulled):
+    speed, frames = 0.01, 30
+
+    def target(i):
+        return Box(0.3 + speed * i, 0.5, 0.1, 0.1)
+
+    mgr = _moving_manager(lambda i: 0.9 if i < READY else 0.0, lambda i: target(min(i, READY - 1)))
+    tid = mgr.select(target(0))
+    _confirm(mgr, [(target(0), LABEL)], look=UNIT)
+
+    for i in range(READY, READY + frames):
+        found = [replace(_det(i - 1, target(i - 1)), embedding=look)] if i % 2 else []
+        snap = next(s for s in mgr.step(_frame(i), found) if s.track_id == tid)
+
+    assert (abs(snap.box.cx - target(READY + frames - 1).cx) < target(0).w / 2) is pulled
+
+
+@pytest.mark.parametrize("boxes, state", [((BOX,), S.TRACKING), ((BOX, OTHER), S.REACQUIRING)])
+def test_a_reacquiring_track_is_not_lifted_past_a_look_alike(boxes, state):
+    mgr, _, _ = _manager(lambda i: 0.9 if i < READY else None)
+    tid = mgr.select(BOX)
+    _confirm(mgr, [(BOX, LABEL)], look=UNIT)
+    reacquiring = READY + CFG.occlusion_timeout_ns // FRAME_NS + 2
+    _run(mgr, READY, reacquiring - READY)
+    assert _state(mgr, reacquiring, tid) is S.REACQUIRING
+
+    seen = [replace(_det(reacquiring, b), embedding=UNIT) for b in boxes]
+
+    assert _state(mgr, reacquiring + 1, tid, seen) is state
+
+
+def test_labels_are_the_classes_tracks_watch():
+    mgr, _, _ = _manager()
+    mgr.select(BOX)
+    mgr.select(OTHER)
+    _confirm(mgr, [(BOX, LABEL)])
+
+    assert mgr.labels() == frozenset({LABEL})
 
 
 def test_a_detection_does_not_confirm_an_initializing_track():

@@ -23,6 +23,9 @@ v1 never moves hardware.
 
 ## Status
 
+> **Paused since October 2026.** Work stopped mid Phase 4; the latest
+> state is on branch `phase4-reacquire`.
+
 Phase 3 of 7 is closed: a detector runs beside the trackers and can raise
 a track's confidence. Phase 4, occlusion and reacquisition, is in progress:
 two tracks no longer share one object, and reacquisition with a DINOv2-S

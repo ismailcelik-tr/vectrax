@@ -23,6 +23,9 @@ araştırma. v1 hiçbir donanımı hareket ettirmez.
 
 ## Durum
 
+> **Ekim 2026'dan beri durduruldu.** Çalışma Phase 4'ün ortasında kaldı; son
+> durum `phase4-reacquire` branch'inde.
+
 7 fazın 3.'sü kapandı: tracker'ların yanında bir detector çalışıyor ve bir
 track'in güvenini yükseltebiliyor. Phase 4, occlusion ve yeniden bulma
 (reacquisition), sürüyor: iki track artık aynı nesneyi paylaşmıyor; DINOv2-S
